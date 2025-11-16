@@ -1,0 +1,16 @@
+# Core dependencies
+python-dotenv==1.0.0
+numpy==1.24.3
+
+# Wake word detection
+openwakeword==0.5.1
+
+# Speech recognition
+SpeechRecognition==3.10.0
+PyAudio==0.2.14
+
+# Audio processing
+scipy==1.11.4
+
+# Logging and utilities
+colorama==0.4.6
