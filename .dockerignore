@@ -1,0 +1,158 @@
+# Docker ignore file for Voice Assistant
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+README*
+
+# Development files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+test_venv/
+test_universal/
+test_unified/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Environments
+#.env
+.venv
+env/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Build automation scripts (host-only)
+build.sh
+build.ps1
+Makefile
+
+# Scripts (keep only necessary ones)
+# NOTE: build.sh, deploy*.sh, install.sh, setup.sh are HOST scripts for deployment
+# Only install.py and runtime utilities are needed INSIDE Docker
+scripts/
+!scripts/install.py
+!scripts/model_manager_lazy.py
+!scripts/setup_gemma_model.py
+!scripts/check_devices.py
+!scripts/generate_sample_audio.py
+
+# Legacy code (exclude from production builds)
+last_legacy/
+legacy_src/
+
+# Models (will be mounted as volumes)
+models/
+!models/.gitkeep
+
+# Data (will be mounted as volumes)
+data/
+!data/.gitkeep
+
+# Voices (will be mounted as volumes)
+voices/
+!voices/.gitkeep
+
+# Config (will be mounted as volumes)
+config/
+!config/.gitkeep
+
+# Monitoring
+monitoring/
+
+# Large files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Node.js (if any)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Backup files
+*.bak
+*.backup
+*.old
