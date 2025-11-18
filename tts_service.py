@@ -8,6 +8,7 @@ import logging
 import argparse
 import wave
 import io
+import tempfile
 from pathlib import Path
 import numpy as np
 from piper.voice import PiperVoice
@@ -56,7 +57,7 @@ class TTSService:
         # If no model exists, inform user
         logger.warning("No Piper voice model found.")
         logger.info(f"Please download a model to: {models_dir}")
-        logger.info("Download models from: https://github.com/rhasspy/piper/releases/tag/v1.2.0")
+        logger.info("Download models from: https://huggingface.co/rhasspy/piper-voices")
         logger.info("Or run: python download_voice.py")
 
         raise FileNotFoundError(
@@ -82,6 +83,22 @@ class TTSService:
             print(f"\n🔊 Speaking: \"{text}\"")
             logger.info(f"Synthesizing: {text}")
 
+            # Try streaming method first (if available)
+            if hasattr(self.voice, 'synthesize_stream_raw'):
+                return self._speak_streaming(text)
+            else:
+                # Fallback to WAV file method
+                logger.info("Using WAV file method (synthesize_stream_raw not available)")
+                return self._speak_via_wav(text)
+
+        except Exception as e:
+            logger.error(f"Failed to speak text: {e}", exc_info=True)
+            print(f"❌ Error: {e}")
+            return False
+
+    def _speak_streaming(self, text):
+        """Stream audio directly (if synthesize_stream_raw is available)."""
+        try:
             # Open audio stream
             stream = self.audio.open(
                 format=pyaudio.paInt16,
@@ -92,22 +109,62 @@ class TTSService:
 
             # Synthesize and stream audio
             for audio_bytes in self.voice.synthesize_stream_raw(text):
-                # Convert bytes to numpy array
+                # Convert bytes to numpy array and play
                 int_data = np.frombuffer(audio_bytes, dtype=np.int16)
-                # Play audio
                 stream.write(int_data.tobytes())
 
             # Clean up
             stream.stop_stream()
             stream.close()
 
-            logger.info("Speech completed successfully")
+            logger.info("Speech completed successfully (streaming)")
             return True
 
         except Exception as e:
-            logger.error(f"Failed to speak text: {e}", exc_info=True)
-            print(f"❌ Error: {e}")
-            return False
+            logger.error(f"Streaming failed: {e}")
+            raise
+
+    def _speak_via_wav(self, text):
+        """Generate WAV file and play it (fallback method)."""
+        try:
+            # Create temporary WAV file in memory
+            audio_stream = io.BytesIO()
+            wav_file = wave.open(audio_stream, 'wb')
+
+            # Synthesize speech to WAV
+            self.voice.synthesize(text, wav_file)
+            wav_file.close()
+
+            # Read back the audio data
+            audio_stream.seek(0)
+            wav_reader = wave.open(audio_stream, 'rb')
+
+            # Open PyAudio stream
+            stream = self.audio.open(
+                format=self.audio.get_format_from_width(wav_reader.getsampwidth()),
+                channels=wav_reader.getnchannels(),
+                rate=wav_reader.getframerate(),
+                output=True
+            )
+
+            # Play audio
+            chunk_size = 1024
+            audio_data = wav_reader.readframes(chunk_size)
+            while audio_data:
+                stream.write(audio_data)
+                audio_data = wav_reader.readframes(chunk_size)
+
+            # Clean up
+            wav_reader.close()
+            stream.stop_stream()
+            stream.close()
+
+            logger.info("Speech completed successfully (WAV file)")
+            return True
+
+        except Exception as e:
+            logger.error(f"WAV playback failed: {e}")
+            raise
 
     def speak_to_file(self, text, output_path):
         """
@@ -144,6 +201,7 @@ class TTSService:
         info = {
             'sample_rate': self.voice.config.sample_rate,
             'num_speakers': self.voice.config.num_speakers if hasattr(self.voice.config, 'num_speakers') else 1,
+            'has_streaming': hasattr(self.voice, 'synthesize_stream_raw'),
         }
         return info
 
