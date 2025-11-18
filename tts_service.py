@@ -134,11 +134,8 @@ class TTSService:
             temp_file.close()
 
             # Synthesize speech to WAV file
-            # MUST set parameters before synthesize() writes data
+            # synthesize() method sets all WAV parameters internally
             wav_file = wave.open(temp_path, 'w')
-            wav_file.setnchannels(1)  # Mono
-            wav_file.setsampwidth(2)  # 16-bit
-            wav_file.setframerate(self.voice.config.sample_rate)
 
             logger.info(f"Calling synthesize with text: '{text}'")
             self.voice.synthesize(text, wav_file)
@@ -212,11 +209,8 @@ class TTSService:
         try:
             logger.info(f"Synthesizing to file: {output_path}")
 
-            # MUST set parameters before synthesize() writes data
+            # synthesize() method sets all WAV parameters internally
             wav_file = wave.open(str(output_path), 'w')
-            wav_file.setnchannels(1)  # Mono
-            wav_file.setsampwidth(2)  # 16-bit
-            wav_file.setframerate(self.voice.config.sample_rate)
 
             self.voice.synthesize(text, wav_file)
 
