@@ -12,5 +12,8 @@ PyAudio==0.2.14
 # Audio processing
 scipy==1.11.4
 
+# Text-to-Speech
+pyttsx3==2.90
+
 # Logging and utilities
 colorama==0.4.6
