@@ -126,38 +126,37 @@ class TTSService:
 
     def _speak_via_wav(self, text):
         """Generate WAV file and play it (fallback method)."""
+        temp_file = None
         try:
-            # Create temporary WAV file in memory
-            audio_stream = io.BytesIO()
-            wav_file = wave.open(audio_stream, 'wb')
+            # Create temporary WAV file
+            temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+            temp_path = temp_file.name
+            temp_file.close()
 
-            # Synthesize speech to WAV
-            self.voice.synthesize(text, wav_file)
-            wav_file.close()
+            # Synthesize speech to WAV file
+            with wave.open(temp_path, 'wb') as wav_file:
+                self.voice.synthesize(text, wav_file)
 
-            # Read back the audio data
-            audio_stream.seek(0)
-            wav_reader = wave.open(audio_stream, 'rb')
+            # Read and play the WAV file
+            with wave.open(temp_path, 'rb') as wav_reader:
+                # Open PyAudio stream
+                stream = self.audio.open(
+                    format=self.audio.get_format_from_width(wav_reader.getsampwidth()),
+                    channels=wav_reader.getnchannels(),
+                    rate=wav_reader.getframerate(),
+                    output=True
+                )
 
-            # Open PyAudio stream
-            stream = self.audio.open(
-                format=self.audio.get_format_from_width(wav_reader.getsampwidth()),
-                channels=wav_reader.getnchannels(),
-                rate=wav_reader.getframerate(),
-                output=True
-            )
-
-            # Play audio
-            chunk_size = 1024
-            audio_data = wav_reader.readframes(chunk_size)
-            while audio_data:
-                stream.write(audio_data)
+                # Play audio
+                chunk_size = 1024
                 audio_data = wav_reader.readframes(chunk_size)
+                while audio_data:
+                    stream.write(audio_data)
+                    audio_data = wav_reader.readframes(chunk_size)
 
-            # Clean up
-            wav_reader.close()
-            stream.stop_stream()
-            stream.close()
+                # Clean up stream
+                stream.stop_stream()
+                stream.close()
 
             logger.info("Speech completed successfully (WAV file)")
             return True
@@ -165,6 +164,14 @@ class TTSService:
         except Exception as e:
             logger.error(f"WAV playback failed: {e}")
             raise
+
+        finally:
+            # Clean up temporary file
+            if temp_file and Path(temp_path).exists():
+                try:
+                    Path(temp_path).unlink()
+                except:
+                    pass
 
     def speak_to_file(self, text, output_path):
         """
