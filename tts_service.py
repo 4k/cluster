@@ -134,7 +134,7 @@ class TTSService:
             temp_file.close()
 
             # Synthesize speech to WAV file
-            with wave.open(temp_path, 'wb') as wav_file:
+            with wave.open(temp_path, 'w') as wav_file:
                 self.voice.synthesize(text, wav_file)
 
             # Read and play the WAV file
@@ -191,7 +191,7 @@ class TTSService:
         try:
             logger.info(f"Synthesizing to file: {output_path}")
 
-            with wave.open(str(output_path), 'wb') as wav_file:
+            with wave.open(str(output_path), 'w') as wav_file:
                 self.voice.synthesize(text, wav_file)
 
             logger.info(f"Audio saved to: {output_path}")
