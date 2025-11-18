@@ -3,14 +3,12 @@
 Speech-to-Text Service with Wake Word Detection.
 Uses openwakeword to detect "Computer" wake word, then transcribes speech to text.
 """
-import os
 import sys
 import logging
 import numpy as np
 import pyaudio
 from openwakeword.model import Model
 import speech_recognition as sr
-from collections import deque
 
 logger = logging.getLogger(__name__)
 
@@ -18,29 +16,37 @@ logger = logging.getLogger(__name__)
 class STTService:
     """Speech-to-Text service with wake word detection."""
 
-    def __init__(self, wake_word="computer", chunk_size=1280, sample_rate=16000):
+    def __init__(self, wake_word="computer", chunk_size=1280, sample_rate=16000, threshold=0.5):
         """
         Initialize the STT service.
 
         Args:
             wake_word: Wake word to detect (default: "computer")
-            chunk_size: Audio chunk size in frames (default: 1280)
+            chunk_size: Audio chunk size in frames (default: 1280 for 80ms at 16kHz)
             sample_rate: Audio sample rate in Hz (default: 16000)
+            threshold: Detection threshold 0.0-1.0 (default: 0.5)
         """
         self.wake_word = wake_word.lower()
         self.chunk_size = chunk_size
         self.sample_rate = sample_rate
+        self.threshold = threshold
         self.is_running = False
 
         # Initialize wake word model
         logger.info("Initializing wake word detection model...")
-        self.wake_word_model = Model(
-            wakeword_models=[self.wake_word],
-            inference_framework='onnx'
-        )
+        try:
+            # Load pre-trained models (or specific model if available)
+            self.wake_word_model = Model(inference_framework='onnx')
+            logger.info(f"Loaded wake word models: {list(self.wake_word_model.models.keys())}")
+        except Exception as e:
+            logger.error(f"Failed to load wake word model: {e}", exc_info=True)
+            raise
 
         # Initialize speech recognizer
         self.recognizer = sr.Recognizer()
+        # Adjust for better recognition
+        self.recognizer.energy_threshold = 300
+        self.recognizer.dynamic_energy_threshold = True
 
         # Audio settings
         self.format = pyaudio.paInt16
@@ -53,21 +59,27 @@ class STTService:
         Detect wake word in audio data.
 
         Args:
-            audio_data: Audio data as numpy array
+            audio_data: Audio data as numpy array (float32, range -1.0 to 1.0)
 
         Returns:
-            bool: True if wake word detected, False otherwise
+            tuple: (detected, model_name, score) - detected is True if wake word found
         """
-        # Get prediction from model
-        prediction = self.wake_word_model.predict(audio_data)
+        try:
+            # Get prediction from model
+            prediction = self.wake_word_model.predict(audio_data)
 
-        # Check if wake word was detected
-        for model_name, score in prediction.items():
-            if self.wake_word in model_name.lower() and score > 0.5:
-                logger.info(f"Wake word detected! (confidence: {score:.2f})")
-                return True
+            # Check all models for wake word detection
+            for model_name, score in prediction.items():
+                # Check if this model matches our wake word and score is above threshold
+                if self.wake_word in model_name.lower() and score > self.threshold:
+                    logger.info(f"Wake word '{self.wake_word}' detected in model '{model_name}' (confidence: {score:.3f})")
+                    return True, model_name, score
 
-        return False
+            return False, None, 0.0
+
+        except Exception as e:
+            logger.error(f"Error in wake word detection: {e}", exc_info=True)
+            return False, None, 0.0
 
     def _transcribe_speech(self):
         """
@@ -81,18 +93,21 @@ class STTService:
                 logger.info("Listening for speech...")
                 print("\n🎤 Listening... (speak now)")
 
-                # Adjust for ambient noise
+                # Adjust for ambient noise (quick adjustment)
                 self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
 
-                # Listen for speech (with timeout)
-                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=10)
+                # Listen for speech (with timeout and phrase limit)
+                audio = self.recognizer.listen(
+                    source,
+                    timeout=5,
+                    phrase_time_limit=10
+                )
 
                 logger.info("Processing speech...")
                 print("⏳ Processing...")
 
                 # Recognize speech using Google Speech Recognition
                 text = self.recognizer.recognize_google(audio)
-
                 return text
 
         except sr.WaitTimeoutError:
@@ -130,38 +145,46 @@ class STTService:
             )
 
             logger.info("STT Service started. Listening for wake word...")
-            print(f"\n👂 Listening for wake word: '{self.wake_word}'")
-            print("   (Say 'Computer' to activate speech recognition)")
-            print("   (Press Ctrl+C to stop)\n")
-
-            # Buffer to accumulate audio for wake word detection
-            audio_buffer = deque(maxlen=10)
+            print(f"\n{'='*60}")
+            print(f"👂 Listening for wake word: '{self.wake_word}'")
+            print(f"   Available models: {list(self.wake_word_model.models.keys())}")
+            print(f"   (Say 'Computer' to activate speech recognition)")
+            print(f"   (Press Ctrl+C to stop)")
+            print(f"{'='*60}\n")
 
             while self.is_running:
-                # Read audio data
-                audio_data = stream.read(self.chunk_size, exception_on_overflow=False)
+                try:
+                    # Read audio data
+                    audio_data = stream.read(self.chunk_size, exception_on_overflow=False)
 
-                # Convert to numpy array
-                audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+                    # Convert to numpy array (float32, normalized to -1.0 to 1.0)
+                    audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
 
-                # Check for wake word
-                if self._detect_wake_word(audio_array):
-                    print(f"\n✅ Wake word '{self.wake_word}' detected!")
+                    # Check for wake word
+                    detected, model_name, score = self._detect_wake_word(audio_array)
 
-                    # Stop wake word detection temporarily
-                    stream.stop_stream()
+                    if detected:
+                        print(f"\n✅ Wake word detected! (model: {model_name}, confidence: {score:.3f})")
 
-                    # Transcribe speech
-                    text = self._transcribe_speech()
+                        # Stop wake word detection temporarily
+                        stream.stop_stream()
 
-                    if text:
-                        print(f"\n📝 Transcribed text:")
-                        print(f"   \"{text}\"\n")
-                        logger.info(f"Transcribed: {text}")
+                        # Transcribe speech
+                        text = self._transcribe_speech()
 
-                    # Resume wake word detection
-                    print(f"👂 Listening for wake word: '{self.wake_word}'...\n")
-                    stream.start_stream()
+                        if text:
+                            print(f"\n📝 Transcribed text:")
+                            print(f"   \"{text}\"\n")
+                            logger.info(f"Transcribed: {text}")
+
+                        # Resume wake word detection
+                        print(f"👂 Listening for wake word: '{self.wake_word}'...\n")
+                        stream.start_stream()
+
+                except IOError as e:
+                    # Handle audio buffer overflow
+                    logger.warning(f"Audio buffer overflow: {e}")
+                    continue
 
         except KeyboardInterrupt:
             logger.info("Stopping STT service (user interrupt)...")
@@ -174,8 +197,11 @@ class STTService:
         finally:
             # Clean up
             if 'stream' in locals():
-                stream.stop_stream()
-                stream.close()
+                try:
+                    stream.stop_stream()
+                    stream.close()
+                except:
+                    pass
             audio.terminate()
             self.is_running = False
             logger.info("STT service stopped")
@@ -194,9 +220,8 @@ def main():
     )
 
     # Create and start STT service
-    stt_service = STTService(wake_word="computer")
-
     try:
+        stt_service = STTService(wake_word="computer")
         stt_service.start()
     except Exception as e:
         logger.error(f"Failed to start STT service: {e}", exc_info=True)
