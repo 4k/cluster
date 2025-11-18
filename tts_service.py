@@ -144,20 +144,30 @@ class TTSService:
 
             # Read and play the WAV file
             with wave.open(temp_path, 'rb') as wav_reader:
-                # Open PyAudio stream
+                # Get WAV parameters
+                sample_width = wav_reader.getsampwidth()
+                channels = wav_reader.getnchannels()
+                framerate = wav_reader.getframerate()
+
+                logger.info(f"Playing audio: {channels} channel(s), {framerate} Hz, {sample_width} bytes/sample")
+
+                # Open PyAudio stream with explicit parameters
                 stream = self.audio.open(
-                    format=self.audio.get_format_from_width(wav_reader.getsampwidth()),
-                    channels=wav_reader.getnchannels(),
-                    rate=wav_reader.getframerate(),
-                    output=True
+                    format=self.audio.get_format_from_width(sample_width),
+                    channels=channels,
+                    rate=framerate,
+                    output=True,
+                    frames_per_buffer=1024
                 )
 
-                # Play audio
-                chunk_size = 1024
-                audio_data = wav_reader.readframes(chunk_size)
-                while audio_data:
-                    stream.write(audio_data)
-                    audio_data = wav_reader.readframes(chunk_size)
+                # Read all audio data
+                audio_data = wav_reader.readframes(wav_reader.getnframes())
+
+                # Play audio in chunks to avoid buffer issues
+                chunk_size = 4096
+                for i in range(0, len(audio_data), chunk_size):
+                    chunk = audio_data[i:i+chunk_size]
+                    stream.write(chunk)
 
                 # Clean up stream
                 stream.stop_stream()
