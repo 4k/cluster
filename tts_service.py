@@ -1,67 +1,148 @@
 #!/usr/bin/env python3
 """
-Text-to-Speech Service.
+Text-to-Speech Service using Piper-TTS.
 Converts text to speech and plays it through loudspeakers.
 """
 import sys
 import logging
 import argparse
-import pyttsx3
+import io
+import wave
+from pathlib import Path
+from piper import PiperVoice
+import pyaudio
 
 logger = logging.getLogger(__name__)
 
 
 class TTSService:
-    """Text-to-Speech service for converting text to audio output."""
+    """Text-to-Speech service using Piper-TTS for high-quality voice synthesis."""
 
-    def __init__(self, rate=150, volume=1.0, voice_index=0):
+    def __init__(self, model_path=None, speaker_id=0):
         """
         Initialize the TTS service.
 
         Args:
-            rate: Speech rate (words per minute, default: 150)
-            volume: Volume level 0.0 to 1.0 (default: 1.0)
-            voice_index: Voice index to use (default: 0)
+            model_path: Path to Piper voice model (.onnx file)
+            speaker_id: Speaker ID for multi-speaker models (default: 0)
         """
-        self.rate = rate
-        self.volume = volume
-        self.voice_index = voice_index
+        self.speaker_id = speaker_id
+        self.model_path = model_path or self._get_default_model()
 
-        # Initialize TTS engine
-        logger.info("Initializing TTS engine...")
+        # Initialize Piper voice
+        logger.info(f"Loading Piper voice model: {self.model_path}")
         try:
-            self.engine = pyttsx3.init()
-            self._configure_engine()
+            self.voice = PiperVoice.load(str(self.model_path))
             logger.info("TTS Service initialized successfully")
+            logger.info(f"Voice: {self.voice.config.get('name', 'Unknown')}")
+            logger.info(f"Language: {self.voice.config.get('language', 'Unknown')}")
         except Exception as e:
-            logger.error(f"Failed to initialize TTS engine: {e}", exc_info=True)
+            logger.error(f"Failed to load Piper voice model: {e}", exc_info=True)
             raise
 
-    def _configure_engine(self):
-        """Configure the TTS engine with settings."""
-        # Set speech rate
-        self.engine.setProperty('rate', self.rate)
+        # Initialize PyAudio for playback
+        self.audio = pyaudio.PyAudio()
 
-        # Set volume
-        self.engine.setProperty('volume', self.volume)
+    def _get_default_model(self):
+        """Get default model path or download if needed."""
+        # Default model directory
+        models_dir = Path.home() / ".local" / "share" / "piper" / "voices"
+        models_dir.mkdir(parents=True, exist_ok=True)
 
-        # Set voice
-        voices = self.engine.getProperty('voices')
-        if voices and len(voices) > self.voice_index:
-            self.engine.setProperty('voice', voices[self.voice_index].id)
-            logger.info(f"Using voice: {voices[self.voice_index].name}")
-        else:
-            logger.warning(f"Voice index {self.voice_index} not available, using default")
+        # Look for any existing .onnx model
+        existing_models = list(models_dir.glob("*.onnx"))
+        if existing_models:
+            logger.info(f"Using existing model: {existing_models[0]}")
+            return existing_models[0]
 
-    def list_voices(self):
-        """List all available voices."""
-        voices = self.engine.getProperty('voices')
-        print("\n📢 Available voices:")
-        for i, voice in enumerate(voices):
-            print(f"  [{i}] {voice.name}")
-            print(f"      ID: {voice.id}")
-            print(f"      Languages: {voice.languages}")
-            print()
+        # If no model exists, inform user
+        logger.warning("No Piper voice model found.")
+        logger.info(f"Please download a model to: {models_dir}")
+        logger.info("Download models from: https://github.com/rhasspy/piper/releases/tag/v1.2.0")
+        logger.info("Example: en_US-lessac-medium.onnx")
+
+        raise FileNotFoundError(
+            f"No Piper voice model found in {models_dir}. "
+            f"Please download a model from https://github.com/rhasspy/piper/releases"
+        )
+
+    def synthesize(self, text):
+        """
+        Synthesize text to audio data.
+
+        Args:
+            text: Text to convert to speech
+
+        Returns:
+            tuple: (audio_data, sample_rate) or (None, None) on error
+        """
+        if not text or not text.strip():
+            logger.warning("Empty text provided, nothing to synthesize")
+            return None, None
+
+        try:
+            logger.info(f"Synthesizing: {text}")
+
+            # Synthesize speech
+            audio_stream = io.BytesIO()
+            wav_file = wave.open(audio_stream, 'wb')
+
+            # Configure WAV file
+            wav_file.setnchannels(1)  # Mono
+            wav_file.setsampwidth(2)  # 16-bit
+            wav_file.setframerate(self.voice.config['sample_rate'])
+
+            # Synthesize and write to WAV
+            self.voice.synthesize(text, wav_file, speaker_id=self.speaker_id)
+            wav_file.close()
+
+            # Get audio data
+            audio_stream.seek(0)
+            wav_reader = wave.open(audio_stream, 'rb')
+            audio_data = wav_reader.readframes(wav_reader.getnframes())
+            sample_rate = wav_reader.getframerate()
+            wav_reader.close()
+
+            return audio_data, sample_rate
+
+        except Exception as e:
+            logger.error(f"Failed to synthesize text: {e}", exc_info=True)
+            print(f"❌ Error: {e}")
+            return None, None
+
+    def play(self, audio_data, sample_rate):
+        """
+        Play audio data through loudspeakers.
+
+        Args:
+            audio_data: Raw audio bytes
+            sample_rate: Sample rate in Hz
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Open audio stream
+            stream = self.audio.open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=sample_rate,
+                output=True
+            )
+
+            # Play audio
+            stream.write(audio_data)
+
+            # Clean up
+            stream.stop_stream()
+            stream.close()
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to play audio: {e}", exc_info=True)
+            print(f"❌ Playback error: {e}")
+            return False
 
     def speak(self, text):
         """
@@ -78,62 +159,42 @@ class TTSService:
             return False
 
         try:
-            logger.info(f"Speaking: {text}")
             print(f"\n🔊 Speaking: \"{text}\"")
 
-            # Speak the text
-            self.engine.say(text)
-            self.engine.runAndWait()
+            # Synthesize audio
+            audio_data, sample_rate = self.synthesize(text)
 
-            logger.info("Speech completed successfully")
-            return True
+            if audio_data is None:
+                return False
+
+            # Play audio
+            success = self.play(audio_data, sample_rate)
+
+            if success:
+                logger.info("Speech completed successfully")
+
+            return success
 
         except Exception as e:
             logger.error(f"Failed to speak text: {e}", exc_info=True)
             print(f"❌ Error: {e}")
             return False
 
-    def set_rate(self, rate):
-        """
-        Set speech rate.
-
-        Args:
-            rate: Speech rate in words per minute
-        """
-        self.rate = rate
-        self.engine.setProperty('rate', rate)
-        logger.info(f"Speech rate set to {rate} WPM")
-
-    def set_volume(self, volume):
-        """
-        Set volume level.
-
-        Args:
-            volume: Volume level from 0.0 to 1.0
-        """
-        self.volume = max(0.0, min(1.0, volume))
-        self.engine.setProperty('volume', self.volume)
-        logger.info(f"Volume set to {self.volume}")
-
-    def set_voice(self, voice_index):
-        """
-        Set voice by index.
-
-        Args:
-            voice_index: Index of the voice to use
-        """
-        voices = self.engine.getProperty('voices')
-        if voices and 0 <= voice_index < len(voices):
-            self.voice_index = voice_index
-            self.engine.setProperty('voice', voices[voice_index].id)
-            logger.info(f"Voice changed to: {voices[voice_index].name}")
-        else:
-            logger.warning(f"Invalid voice index: {voice_index}")
+    def get_voice_info(self):
+        """Get information about the current voice."""
+        info = {
+            'name': self.voice.config.get('name', 'Unknown'),
+            'language': self.voice.config.get('language', 'Unknown'),
+            'quality': self.voice.config.get('quality', 'Unknown'),
+            'sample_rate': self.voice.config.get('sample_rate', 'Unknown'),
+            'num_speakers': self.voice.config.get('num_speakers', 1)
+        }
+        return info
 
     def stop(self):
-        """Stop the TTS engine."""
+        """Stop the TTS engine and clean up resources."""
         try:
-            self.engine.stop()
+            self.audio.terminate()
             logger.info("TTS engine stopped")
         except Exception as e:
             logger.error(f"Error stopping TTS engine: {e}")
@@ -148,45 +209,42 @@ def main():
     )
 
     # Parse command-line arguments
-    parser = argparse.ArgumentParser(description='Text-to-Speech Service')
+    parser = argparse.ArgumentParser(description='Piper Text-to-Speech Service')
     parser.add_argument(
         'text',
         nargs='*',
         help='Text to convert to speech'
     )
     parser.add_argument(
-        '--rate',
-        type=int,
-        default=150,
-        help='Speech rate in words per minute (default: 150)'
+        '--model',
+        type=str,
+        help='Path to Piper voice model (.onnx file)'
     )
     parser.add_argument(
-        '--volume',
-        type=float,
-        default=1.0,
-        help='Volume level 0.0 to 1.0 (default: 1.0)'
-    )
-    parser.add_argument(
-        '--voice',
+        '--speaker',
         type=int,
         default=0,
-        help='Voice index to use (default: 0)'
+        help='Speaker ID for multi-speaker models (default: 0)'
     )
     parser.add_argument(
-        '--list-voices',
+        '--info',
         action='store_true',
-        help='List all available voices and exit'
+        help='Show voice information and exit'
     )
 
     args = parser.parse_args()
 
     try:
         # Initialize TTS service
-        tts = TTSService(rate=args.rate, volume=args.volume, voice_index=args.voice)
+        tts = TTSService(model_path=args.model, speaker_id=args.speaker)
 
-        # List voices if requested
-        if args.list_voices:
-            tts.list_voices()
+        # Show voice info if requested
+        if args.info:
+            info = tts.get_voice_info()
+            print("\n📢 Voice Information:")
+            for key, value in info.items():
+                print(f"  {key.replace('_', ' ').title()}: {value}")
+            print()
             return 0
 
         # Get text from arguments
@@ -194,14 +252,17 @@ def main():
             print("❌ Error: No text provided")
             print("\nUsage examples:")
             print('  python tts_service.py "Hello, how are you?"')
-            print('  python tts_service.py --rate 200 "I speak faster now"')
-            print('  python tts_service.py --list-voices')
+            print('  python tts_service.py --model path/to/model.onnx "Custom voice"')
+            print('  python tts_service.py --info')
             return 1
 
         text = ' '.join(args.text)
 
         # Speak the text
         success = tts.speak(text)
+
+        # Clean up
+        tts.stop()
 
         return 0 if success else 1
 
