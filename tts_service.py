@@ -134,14 +134,28 @@ class TTSService:
             temp_file.close()
 
             # Synthesize speech to WAV file
+            # Set WAV parameters BEFORE calling synthesize
             wav_file = wave.open(temp_path, 'w')
+            wav_file.setnchannels(1)  # Mono
+            wav_file.setsampwidth(2)  # 16-bit
+            wav_file.setframerate(self.voice.config.sample_rate)
 
             logger.info(f"Calling synthesize with text: '{text}'")
-            self.voice.synthesize(text, wav_file)
+
+            # Check if synthesize() actually works
+            try:
+                self.voice.synthesize(text, wav_file)
+                logger.info("Synthesize call completed")
+            except Exception as e:
+                logger.error(f"Synthesize failed: {e}", exc_info=True)
+                # Try alternate method: get raw audio and write manually
+                logger.info("Trying alternate audio generation method...")
+                wav_file.close()
+                raise
 
             # MUST close the file to flush data to disk
             wav_file.close()
-            logger.info("Synthesize completed and file closed")
+            logger.info("File closed")
 
             # Check if file has data
             file_size = Path(temp_path).stat().st_size
@@ -211,7 +225,12 @@ class TTSService:
         try:
             logger.info(f"Synthesizing to file: {output_path}")
 
+            # Set WAV parameters BEFORE calling synthesize
             wav_file = wave.open(str(output_path), 'w')
+            wav_file.setnchannels(1)  # Mono
+            wav_file.setsampwidth(2)  # 16-bit
+            wav_file.setframerate(self.voice.config.sample_rate)
+
             self.voice.synthesize(text, wav_file)
 
             # MUST close the file to flush data to disk
@@ -228,10 +247,15 @@ class TTSService:
 
     def get_voice_info(self):
         """Get information about the current voice."""
+        # Debug: list all available methods
+        voice_methods = [m for m in dir(self.voice) if not m.startswith('_')]
+        logger.info(f"Available voice methods: {voice_methods}")
+
         info = {
             'sample_rate': self.voice.config.sample_rate,
             'num_speakers': self.voice.config.num_speakers if hasattr(self.voice.config, 'num_speakers') else 1,
             'has_streaming': hasattr(self.voice, 'synthesize_stream_raw'),
+            'available_methods': voice_methods,
         }
         return info
 
