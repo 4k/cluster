@@ -134,12 +134,14 @@ class TTSService:
             temp_file.close()
 
             # Synthesize speech to WAV file
-            # synthesize() method sets all WAV parameters internally
             wav_file = wave.open(temp_path, 'w')
 
             logger.info(f"Calling synthesize with text: '{text}'")
             self.voice.synthesize(text, wav_file)
-            logger.info("Synthesize completed")
+
+            # MUST close the file to flush data to disk
+            wav_file.close()
+            logger.info("Synthesize completed and file closed")
 
             # Check if file has data
             file_size = Path(temp_path).stat().st_size
@@ -209,10 +211,11 @@ class TTSService:
         try:
             logger.info(f"Synthesizing to file: {output_path}")
 
-            # synthesize() method sets all WAV parameters internally
             wav_file = wave.open(str(output_path), 'w')
-
             self.voice.synthesize(text, wav_file)
+
+            # MUST close the file to flush data to disk
+            wav_file.close()
 
             logger.info(f"Audio saved to: {output_path}")
             print(f"✅ Audio saved to: {output_path}")
