@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Download a default Piper TTS voice model.
+Download a default Piper TTS voice model from Hugging Face.
 """
 import sys
 import urllib.request
@@ -10,7 +10,7 @@ from pathlib import Path
 
 def download_voice(model_name="en_US-lessac-medium"):
     """
-    Download a Piper voice model.
+    Download a Piper voice model from Hugging Face.
 
     Args:
         model_name: Name of the model to download (default: en_US-lessac-medium)
@@ -18,10 +18,6 @@ def download_voice(model_name="en_US-lessac-medium"):
     # Models directory
     models_dir = Path.home() / ".local" / "share" / "piper" / "voices"
     models_dir.mkdir(parents=True, exist_ok=True)
-
-    # Model files
-    onnx_url = f"https://github.com/rhasspy/piper/releases/download/v1.2.0/{model_name}.onnx"
-    json_url = f"https://github.com/rhasspy/piper/releases/download/v1.2.0/{model_name}.onnx.json"
 
     onnx_path = models_dir / f"{model_name}.onnx"
     json_path = models_dir / f"{model_name}.onnx.json"
@@ -34,9 +30,47 @@ def download_voice(model_name="en_US-lessac-medium"):
     print(f"📥 Downloading Piper voice model: {model_name}")
     print(f"   Destination: {models_dir}")
 
+    # Parse model name to build Hugging Face URL
+    # Format: en_US-lessac-medium -> en/en_US/lessac/medium/en_US-lessac-medium.onnx
+    try:
+        parts = model_name.split('-')
+        if len(parts) < 2:
+            raise ValueError("Invalid model name format")
+
+        locale_quality = parts[0]  # e.g., "en_US"
+        voice_quality = '-'.join(parts[1:])  # e.g., "lessac-medium"
+
+        # Split locale
+        lang_parts = locale_quality.split('_')
+        if len(lang_parts) != 2:
+            raise ValueError("Invalid locale format")
+
+        lang = lang_parts[0]  # e.g., "en"
+        locale = locale_quality  # e.g., "en_US"
+
+        # Split voice and quality
+        voice_parts = voice_quality.rsplit('-', 1)
+        if len(voice_parts) != 2:
+            raise ValueError("Invalid voice-quality format")
+
+        voice = voice_parts[0]  # e.g., "lessac"
+        quality = voice_parts[1]  # e.g., "medium"
+
+        # Build Hugging Face URLs
+        base_url = f"https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/{lang}/{locale}/{voice}/{quality}"
+        onnx_url = f"{base_url}/{model_name}.onnx"
+        json_url = f"{base_url}/{model_name}.onnx.json"
+
+    except Exception as e:
+        print(f"❌ Error parsing model name: {e}")
+        print(f"\nModel name should be in format: locale-voice-quality")
+        print(f"Example: en_US-lessac-medium")
+        return False
+
     try:
         # Download ONNX model
         print(f"\n⏳ Downloading {model_name}.onnx...")
+        print(f"   From: {onnx_url}")
         urllib.request.urlretrieve(onnx_url, onnx_path, reporthook=_progress_hook)
         print(f"\n✅ Downloaded: {onnx_path}")
 
@@ -56,7 +90,16 @@ def download_voice(model_name="en_US-lessac-medium"):
         print(f"\nYou can manually download from:")
         print(f"  {onnx_url}")
         print(f"  {json_url}")
-        print(f"\nPlace them in: {models_dir}")
+        print(f"\nOr browse all voices at:")
+        print(f"  https://huggingface.co/rhasspy/piper-voices/tree/v1.0.0")
+        print(f"\nPlace downloaded files in: {models_dir}")
+
+        # Clean up partial downloads
+        if onnx_path.exists():
+            onnx_path.unlink()
+        if json_path.exists():
+            json_path.unlink()
+
         return False
 
 
@@ -76,11 +119,12 @@ def list_available_voices():
     voices = [
         ("en_US-lessac-medium", "English (US) - Female, Medium quality"),
         ("en_US-lessac-high", "English (US) - Female, High quality"),
+        ("en_US-amy-medium", "English (US) - Female, Medium quality"),
         ("en_GB-alan-medium", "English (GB) - Male, Medium quality"),
-        ("en_GB-northern_english_male-medium", "English (GB) - Male, Northern accent"),
+        ("en_GB-alba-medium", "English (GB) - Female, Medium quality"),
         ("de_DE-thorsten-medium", "German - Male, Medium quality"),
         ("fr_FR-siwis-medium", "French - Female, Medium quality"),
-        ("es_ES-sharvard-medium", "Spanish - Male, Medium quality"),
+        ("es_ES-sharvard-medium", "Spanish (Spain) - Male, Medium quality"),
     ]
 
     print("\n📢 Popular Piper Voice Models:")
@@ -89,7 +133,8 @@ def list_available_voices():
         print(f"  {name}")
         print(f"    {description}")
         print()
-    print("Full list: https://github.com/rhasspy/piper/blob/master/VOICES.md")
+    print("Full list: https://huggingface.co/rhasspy/piper-voices/tree/v1.0.0")
+    print("Browse by language and listen to samples")
     print()
 
 
@@ -97,7 +142,7 @@ def main():
     """Main entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Download Piper TTS voice models')
+    parser = argparse.ArgumentParser(description='Download Piper TTS voice models from Hugging Face')
     parser.add_argument(
         '--model',
         type=str,
@@ -107,7 +152,7 @@ def main():
     parser.add_argument(
         '--list',
         action='store_true',
-        help='List available voice models'
+        help='List popular available voice models'
     )
 
     args = parser.parse_args()
