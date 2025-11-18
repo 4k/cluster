@@ -83,12 +83,12 @@ class TTSService:
             print(f"\n🔊 Speaking: \"{text}\"")
             logger.info(f"Synthesizing: {text}")
 
-            # Try streaming method first (if available)
-            if hasattr(self.voice, 'synthesize_stream_raw'):
+            # Try streaming method first (returns AudioChunk objects in 1.3.0)
+            if hasattr(self.voice, 'synthesize'):
                 return self._speak_streaming(text)
             else:
                 # Fallback to WAV file method
-                logger.info("Using WAV file method (synthesize_stream_raw not available)")
+                logger.info("Using WAV file method")
                 return self._speak_via_wav(text)
 
         except Exception as e:
@@ -97,32 +97,40 @@ class TTSService:
             return False
 
     def _speak_streaming(self, text):
-        """Stream audio directly (if synthesize_stream_raw is available)."""
+        """Stream audio directly using synthesize() method (returns AudioChunk objects)."""
         try:
-            # Open audio stream
-            stream = self.audio.open(
-                format=pyaudio.paInt16,
-                channels=1,
-                rate=self.voice.config.sample_rate,
-                output=True
-            )
+            stream = None
+            sample_rate = None
 
-            # Synthesize and stream audio
-            for audio_bytes in self.voice.synthesize_stream_raw(text):
-                # Convert bytes to numpy array and play
-                int_data = np.frombuffer(audio_bytes, dtype=np.int16)
-                stream.write(int_data.tobytes())
+            # Synthesize returns AudioChunk objects
+            for chunk in self.voice.synthesize(text):
+                # Initialize stream on first chunk (we get sample rate from chunk)
+                if stream is None:
+                    sample_rate = chunk.sample_rate
+                    stream = self.audio.open(
+                        format=self.audio.get_format_from_width(chunk.sample_width),
+                        channels=chunk.sample_channels,
+                        rate=sample_rate,
+                        output=True
+                    )
+                    logger.info(f"Audio stream opened: {chunk.sample_rate}Hz, {chunk.sample_channels}ch, {chunk.sample_width}bytes")
+
+                # Play audio chunk
+                stream.write(chunk.audio_int16_bytes)
 
             # Clean up
-            stream.stop_stream()
-            stream.close()
+            if stream:
+                stream.stop_stream()
+                stream.close()
 
             logger.info("Speech completed successfully (streaming)")
             return True
 
         except Exception as e:
-            logger.error(f"Streaming failed: {e}")
-            raise
+            logger.error(f"Streaming failed: {e}", exc_info=True)
+            # Fall back to WAV method
+            logger.info("Falling back to WAV file method")
+            return self._speak_via_wav(text)
 
     def _speak_via_wav(self, text):
         """Generate WAV file and play it (fallback method)."""
@@ -133,29 +141,14 @@ class TTSService:
             temp_path = temp_file.name
             temp_file.close()
 
-            # Synthesize speech to WAV file
-            # Set WAV parameters BEFORE calling synthesize
-            wav_file = wave.open(temp_path, 'w')
-            wav_file.setnchannels(1)  # Mono
-            wav_file.setsampwidth(2)  # 16-bit
-            wav_file.setframerate(self.voice.config.sample_rate)
+            # Synthesize speech to WAV file using piper-tts 1.3.0 API
+            logger.info(f"Calling synthesize_wav with text: '{text}'")
 
-            logger.info(f"Calling synthesize with text: '{text}'")
+            # Use context manager - synthesize_wav handles all WAV parameters
+            with wave.open(temp_path, 'wb') as wav_file:
+                self.voice.synthesize_wav(text, wav_file)
 
-            # Check if synthesize() actually works
-            try:
-                self.voice.synthesize(text, wav_file)
-                logger.info("Synthesize call completed")
-            except Exception as e:
-                logger.error(f"Synthesize failed: {e}", exc_info=True)
-                # Try alternate method: get raw audio and write manually
-                logger.info("Trying alternate audio generation method...")
-                wav_file.close()
-                raise
-
-            # MUST close the file to flush data to disk
-            wav_file.close()
-            logger.info("File closed")
+            logger.info("Synthesis completed")
 
             # Check if file has data
             file_size = Path(temp_path).stat().st_size
@@ -225,16 +218,9 @@ class TTSService:
         try:
             logger.info(f"Synthesizing to file: {output_path}")
 
-            # Set WAV parameters BEFORE calling synthesize
-            wav_file = wave.open(str(output_path), 'w')
-            wav_file.setnchannels(1)  # Mono
-            wav_file.setsampwidth(2)  # 16-bit
-            wav_file.setframerate(self.voice.config.sample_rate)
-
-            self.voice.synthesize(text, wav_file)
-
-            # MUST close the file to flush data to disk
-            wav_file.close()
+            # Use piper-tts 1.3.0 API - synthesize_wav handles all WAV parameters
+            with wave.open(str(output_path), 'wb') as wav_file:
+                self.voice.synthesize_wav(text, wav_file)
 
             logger.info(f"Audio saved to: {output_path}")
             print(f"✅ Audio saved to: {output_path}")
@@ -254,7 +240,8 @@ class TTSService:
         info = {
             'sample_rate': self.voice.config.sample_rate,
             'num_speakers': self.voice.config.num_speakers if hasattr(self.voice.config, 'num_speakers') else 1,
-            'has_streaming': hasattr(self.voice, 'synthesize_stream_raw'),
+            'has_synthesize': hasattr(self.voice, 'synthesize'),
+            'has_synthesize_wav': hasattr(self.voice, 'synthesize_wav'),
             'available_methods': voice_methods,
         }
         return info
