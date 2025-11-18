@@ -1,0 +1,60 @@
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+app.log
+logs/
+*.out
+
+# Environment variables
+.env.local
+.env.*.local
+
+# Audio/Model files
+*.wav
+*.mp3
+models/
+*.bin
+*.onnx
+*.tflite
+
+# Cache
+.cache/
+*.cache
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
