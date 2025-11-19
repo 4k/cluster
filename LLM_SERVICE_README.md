@@ -100,6 +100,29 @@ Verify Ollama is accessible and list available models
 
 ## Troubleshooting
 
+### Quick Port Test
+
+Run the automated port test script first:
+
+```bash
+./test_ollama_port.sh
+```
+
+This will diagnose connectivity issues automatically.
+
+### Unraid Docker Bridge Mode Port Configuration
+
+**If your Ollama container is in bridge mode**, you need to configure port mapping:
+
+1. See detailed instructions in: **[UNRAID_PORT_CONFIG.md](UNRAID_PORT_CONFIG.md)**
+2. Quick fix:
+   - Stop Ollama container
+   - Edit container → Add port mapping
+   - Container Port: `11434` → Host Port: `11434`
+   - Apply and restart
+
+**Alternative:** Switch to host network mode (easier, no port mapping needed)
+
 ### Getting 403 Access Denied
 
 If you see "403 Access denied" errors:
