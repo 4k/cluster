@@ -179,28 +179,52 @@ class STTService:
             device_channels = int(device_info['maxInputChannels'])
             device_sample_rate = int(device_info['defaultSampleRate'])
 
-            # Use device's native channels and sample rate
-            input_channels = min(device_channels, 2)  # Use mono or stereo
-            input_sample_rate = device_sample_rate  # Use device's native rate
-
             logger.info(f"Device capabilities: {device_channels} channels, {device_sample_rate} Hz")
-            logger.info(f"Using: {input_channels} channel(s), {input_sample_rate} Hz")
 
-            # Adjust chunk size for different sample rate
-            # Original: 1280 frames at 16kHz = 80ms
-            # Scale chunk size to maintain ~80ms duration
-            adjusted_chunk_size = int(self.chunk_size * input_sample_rate / self.sample_rate)
-            logger.info(f"Adjusted chunk size: {adjusted_chunk_size} frames (~80ms)")
+            # Try different configurations to find one that works
+            # Some devices report stereo but only work in mono
+            channel_options = [min(device_channels, 2), 1] if device_channels >= 2 else [1]
+            buffer_sizes = [1024, 2048, 4096, 8192]
 
-            # Open audio stream with device's supported parameters
-            stream = audio.open(
-                format=self.format,
-                channels=input_channels,
-                rate=input_sample_rate,
-                input=True,
-                input_device_index=self.device_index,
-                frames_per_buffer=adjusted_chunk_size
-            )
+            stream = None
+            last_error = None
+            input_channels = None
+            adjusted_chunk_size = None
+
+            # Try each combination of channels and buffer size
+            for test_channels in channel_options:
+                for buffer_size in buffer_sizes:
+                    try:
+                        logger.info(f"Trying: {test_channels} channel(s), {device_sample_rate} Hz, buffer={buffer_size}")
+                        stream = audio.open(
+                            format=self.format,
+                            channels=test_channels,
+                            rate=device_sample_rate,
+                            input=True,
+                            input_device_index=self.device_index,
+                            frames_per_buffer=buffer_size
+                        )
+                        logger.info(f"✓ Successfully opened stream")
+                        input_channels = test_channels
+                        input_sample_rate = device_sample_rate
+                        adjusted_chunk_size = buffer_size
+                        break
+                    except OSError as e:
+                        last_error = e
+                        logger.debug(f"  Failed: {e}")
+                        continue
+
+                if stream is not None:
+                    break
+
+            if stream is None:
+                raise OSError(f"Could not open audio stream with any configuration.\n"
+                            f"Last error: {last_error}\n"
+                            f"Possible causes:\n"
+                            f"  - Device is in use by another application (browser, Discord, etc.)\n"
+                            f"  - Device requires exclusive access\n"
+                            f"  - Driver issues\n"
+                            f"Try closing other applications using the microphone.")
 
             # Store actual parameters for processing
             self.actual_sample_rate = input_sample_rate
