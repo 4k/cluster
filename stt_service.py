@@ -95,9 +95,14 @@ class STTService:
             # Check all models for wake word detection
             for model_name, score in prediction.items():
                 # Check if this model matches our wake word and score is above threshold
-                if self.wake_word in model_name.lower() and score > self.threshold:
-                    logger.info(f"Wake word '{self.wake_word}' detected in model '{model_name}' (confidence: {score:.3f})")
-                    return True, model_name, score
+                # Match partial names: "alexa" matches "alexa", "jarvis" matches "hey_jarvis", etc.
+                model_simple = model_name.lower().replace("hey_", "").replace("_", " ")
+                wake_word_simple = self.wake_word.lower().replace("_", " ")
+
+                if wake_word_simple in model_simple or model_simple in wake_word_simple:
+                    if score > self.threshold:
+                        logger.info(f"Wake word '{self.wake_word}' detected in model '{model_name}' (confidence: {score:.3f})")
+                        return True, model_name, score
 
             return False, None, 0.0
 
@@ -192,10 +197,12 @@ class STTService:
 
             logger.info("STT Service started. Listening for wake word...")
             print(f"\n{'='*60}")
-            print(f"👂 Listening for wake word: '{self.wake_word}'")
+            print(f"👂 Listening for wake word: '{self.wake_word.upper()}'")
             print(f"   Audio Device: [{self.device_index}] {device_info['name']}")
-            print(f"   Available models: {list(self.wake_word_model.models.keys())}")
-            print(f"   (Say 'Computer' to activate speech recognition)")
+            print(f"   Detection Threshold: {self.threshold}")
+            print(f"   Available models: {', '.join(list(self.wake_word_model.models.keys()))}")
+            print(f"")
+            print(f"   Say 'Hey {self.wake_word.title()}' to activate speech recognition")
             print(f"   (Press Ctrl+C to stop)")
             print(f"{'='*60}\n")
 
@@ -292,6 +299,12 @@ def main():
         default=0.5,
         help='Wake word detection threshold 0.0-1.0 (default: 0.5)'
     )
+    parser.add_argument(
+        '--wake-word',
+        type=str,
+        default='jarvis',
+        help='Wake word to detect: alexa, jarvis, mycroft, rhasspy (default: jarvis)'
+    )
 
     args = parser.parse_args()
 
@@ -303,7 +316,7 @@ def main():
     # Create and start STT service
     try:
         stt_service = STTService(
-            wake_word="computer",
+            wake_word=args.wake_word,
             threshold=args.threshold,
             device_index=args.device
         )
