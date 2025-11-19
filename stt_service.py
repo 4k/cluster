@@ -13,10 +13,32 @@ import speech_recognition as sr
 logger = logging.getLogger(__name__)
 
 
+def list_audio_devices():
+    """List all available audio input devices."""
+    audio = pyaudio.PyAudio()
+    print("\n📱 Available Audio Input Devices:")
+    print("=" * 70)
+
+    default_device = audio.get_default_input_device_info()
+    default_index = default_device['index']
+
+    for i in range(audio.get_device_count()):
+        device_info = audio.get_device_info_by_index(i)
+        if device_info['maxInputChannels'] > 0:  # Input device
+            is_default = " (DEFAULT)" if i == default_index else ""
+            print(f"  [{i}] {device_info['name']}{is_default}")
+            print(f"      Channels: {device_info['maxInputChannels']}, "
+                  f"Sample Rate: {int(device_info['defaultSampleRate'])} Hz")
+
+    print("=" * 70)
+    audio.terminate()
+    return default_index
+
+
 class STTService:
     """Speech-to-Text service with wake word detection."""
 
-    def __init__(self, wake_word="computer", chunk_size=1280, sample_rate=16000, threshold=0.5):
+    def __init__(self, wake_word="computer", chunk_size=1280, sample_rate=16000, threshold=0.5, device_index=None):
         """
         Initialize the STT service.
 
@@ -25,11 +47,13 @@ class STTService:
             chunk_size: Audio chunk size in frames (default: 1280 for 80ms at 16kHz)
             sample_rate: Audio sample rate in Hz (default: 16000)
             threshold: Detection threshold 0.0-1.0 (default: 0.5)
+            device_index: Audio input device index (default: None = system default)
         """
         self.wake_word = wake_word.lower()
         self.chunk_size = chunk_size
         self.sample_rate = sample_rate
         self.threshold = threshold
+        self.device_index = device_index
         self.is_running = False
 
         # Initialize wake word model
@@ -89,7 +113,7 @@ class STTService:
             str: Transcribed text or None if recognition failed
         """
         try:
-            with sr.Microphone(sample_rate=self.sample_rate) as source:
+            with sr.Microphone(device_index=self.device_index, sample_rate=self.sample_rate) as source:
                 logger.info("Listening for speech...")
                 print("\n🎤 Listening... (speak now)")
 
@@ -135,18 +159,29 @@ class STTService:
         audio = pyaudio.PyAudio()
 
         try:
+            # Get device info
+            if self.device_index is not None:
+                device_info = audio.get_device_info_by_index(self.device_index)
+                logger.info(f"Using audio device [{self.device_index}]: {device_info['name']}")
+            else:
+                device_info = audio.get_default_input_device_info()
+                self.device_index = device_info['index']
+                logger.info(f"Using default audio device [{self.device_index}]: {device_info['name']}")
+
             # Open audio stream
             stream = audio.open(
                 format=self.format,
                 channels=self.channels,
                 rate=self.sample_rate,
                 input=True,
+                input_device_index=self.device_index,
                 frames_per_buffer=self.chunk_size
             )
 
             logger.info("STT Service started. Listening for wake word...")
             print(f"\n{'='*60}")
             print(f"👂 Listening for wake word: '{self.wake_word}'")
+            print(f"   Audio Device: [{self.device_index}] {device_info['name']}")
             print(f"   Available models: {list(self.wake_word_model.models.keys())}")
             print(f"   (Say 'Computer' to activate speech recognition)")
             print(f"   (Press Ctrl+C to stop)")
@@ -213,15 +248,48 @@ class STTService:
 
 def main():
     """Main entry point for testing the STT service."""
+    import argparse
+
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
 
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Speech-to-Text Service with Wake Word Detection')
+    parser.add_argument(
+        '--list-devices',
+        action='store_true',
+        help='List all available audio input devices and exit'
+    )
+    parser.add_argument(
+        '--device',
+        type=int,
+        default=None,
+        help='Audio input device index (use --list-devices to see available devices)'
+    )
+    parser.add_argument(
+        '--threshold',
+        type=float,
+        default=0.5,
+        help='Wake word detection threshold 0.0-1.0 (default: 0.5)'
+    )
+
+    args = parser.parse_args()
+
+    # List devices if requested
+    if args.list_devices:
+        list_audio_devices()
+        return 0
+
     # Create and start STT service
     try:
-        stt_service = STTService(wake_word="computer")
+        stt_service = STTService(
+            wake_word="computer",
+            threshold=args.threshold,
+            device_index=args.device
+        )
         stt_service.start()
     except Exception as e:
         logger.error(f"Failed to start STT service: {e}", exc_info=True)
