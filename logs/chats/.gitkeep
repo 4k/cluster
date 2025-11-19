@@ -1,3 +1,0 @@
-# This file ensures the logs/chats directory is tracked in git
-# Actual chat logs are ignored by .gitignore
-

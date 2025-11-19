@@ -1,267 +1,209 @@
-# Voice Assistant - Simplified Docker Setup
+# AI Assistant
 
-A voice assistant application that works seamlessly across Windows WSL, macOS, Linux, and Raspberry Pi 5.
+A voice-activated AI assistant with speech-to-text (STT) and text-to-speech (TTS) capabilities using Piper-TTS and OpenWakeWord.
 
-## 🚀 **Quick Start**
+## Features
 
-### **1. One-Time Setup**
+- 🎤 **Wake Word Detection** - Activates on hearing "Computer" using OpenWakeWord
+- 🗣️ **Speech-to-Text** - Transcribes your speech to text using Google Speech Recognition
+- 🔊 **Text-to-Speech** - High-quality neural voice synthesis using Piper-TTS
+- 🖥️ **Cross-Platform** - Works on Windows, Linux, and macOS
+- 🌐 **Offline Capable** - TTS works completely offline after model download
+
+## Requirements
+
+- **Python 3.11 or 3.12** (recommended for best compatibility)
+- Windows, Linux, or macOS
+- Microphone and speakers
+
+## Quick Start
+
+### Windows (Recommended)
+
+1. **Install Python 3.12**
+   - Download from https://python.org/downloads/
+   - Make sure to check "Add python.exe to PATH"
+
+2. **Clone and setup:**
+   ```powershell
+   cd C:\Users\YourName\Projects
+   git clone <repository-url>
+   cd cluster
+
+   # Create virtual environment with Python 3.12
+   py -3.12 -m venv venv
+   .\venv\Scripts\Activate.ps1
+
+   # Install dependencies
+   pip install --upgrade pip
+   pip install -r requirements.txt
+
+   # Download Piper voice model
+   python download_voice.py
+   ```
+
+### Linux / WSL
+
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd voice-assistant
+# Install system dependencies
+sudo apt-get update
+sudo apt-get install -y python3-pyaudio portaudio19-dev python3-dev
 
-# Copy environment file and configure
-cp env.example .env
-# Edit .env to customize settings (all configuration is now in environment variables)
+# Setup virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# Download Piper voice model
+python download_voice.py
 ```
 
-### **2. Build & Start** (Choose One Method)
+## Usage
 
-**Option A: Automated Build Scripts (Recommended)** ⭐
+### TTS Service (Text-to-Speech)
+
+```bash
+# Basic usage - speak text through loudspeakers
+python tts_service.py "Hello, how are you?"
+
+# Save to WAV file instead of playing
+python tts_service.py --output hello.wav "Hello, world!"
+
+# Use custom voice model
+python tts_service.py --model path/to/model.onnx "Custom voice"
+
+# Show voice information
+python tts_service.py --info
+```
+
+### STT Service (Speech-to-Text with Wake Word)
+
+```bash
+python stt_service.py
+```
+
+**How it works:**
+1. Wait for "Listening for wake word: 'computer'"
+2. Say **"Computer"** clearly
+3. After detection, speak your text (you have 5 seconds to start, 10 seconds max)
+4. Your transcribed text will appear in the console
+5. The service returns to listening for the wake word
+
+### Downloading Voice Models
+
+```bash
+# Download default English voice (en_US-lessac-medium)
+python download_voice.py
+
+# Download specific voice
+python download_voice.py --model en_US-lessac-high
+
+# List popular available voices
+python download_voice.py --list
+```
+
+Voice models are saved to: `~/.local/share/piper/voices/`
+
+## Project Structure
+
+```
+cluster/
+├── main.py              # Main application entry point (future integration)
+├── stt_service.py       # Speech-to-text with wake word detection
+├── tts_service.py       # Text-to-speech using Piper-TTS
+├── download_voice.py    # Voice model downloader
+├── requirements.txt     # Python dependencies
+├── .env                 # Configuration file
+├── README.md            # This file
+└── INSTALLATION.md      # Detailed installation guide
+```
+
+## Dependencies
+
+- **piper-tts** (1.3.0) - Neural text-to-speech engine
+- **openwakeword** - Wake word detection
+- **SpeechRecognition** - Speech-to-text
+- **PyAudio** - Audio input/output
+- **numpy** - Array processing
+- **scipy** - Scientific computing
+
+## Troubleshooting
+
+### Python Version Issues
+
+**Problem:** Can't install piper-tts or other dependencies
+**Solution:** Use Python 3.11 or 3.12 (not 3.13+)
+
+### PyAudio Installation
+
+**Windows:**
 ```powershell
-# Windows PowerShell
-.\build.ps1 -Detached
-```
-```bash
-# Linux/macOS
-./build.sh --detached
+pip install pyaudio
 ```
 
-**Option B: Makefile**
-```bash
-make dev
-```
-
-**Option C: Direct Docker Compose**
-```bash
-docker-compose up --build -d
-```
-
-> 💡 **Tip:** Build scripts automatically enable BuildKit for faster builds! See [DOCKER_QUICK_REFERENCE.md](DOCKER_QUICK_REFERENCE.md) for all commands.
-
-### **3. Daily Usage**
-```bash
-# View logs
-docker-compose logs -f
-
-# Stop the application
-docker-compose down
-
-# Restart
-docker-compose restart
-```
-
-## ⚙️ **Configuration**
-
-All configuration is now handled through environment variables in the `.env` file. No more YAML config files!
-
-### **Environment Variables**
-- **Copy `env.example` to `.env`** and customize settings
-- **Model settings** are defined in `models.json` (single source of truth)
-- **All other settings** are in environment variables
-
-### **Key Configuration Areas**
-- `LLM_*` - Language model settings (provider, model_id, performance)
-- `TTS_*` - Text-to-speech settings (Piper only)
-- `AUDIO_*` - Audio input/output settings
-- `AMBIENT_STT_*` - Ambient listening configuration (always-on speech recognition)
-- `DISPLAY_*` - Display and animation settings
-- `MOCK_*` - Mock mode flags for testing
-- `DEVELOPMENT_*` - Development and debugging settings
-
-### **Model Configuration**
-Models are defined in `models.json` with all their settings:
-- Model paths and file patterns
-- Performance parameters (GPU layers, threads, etc.)
-- Generation parameters (temperature, top_p, etc.)
-- Context window and quantization info
-
-### **Performance Optimization**
-For Raspberry Pi 5 with GPU acceleration:
-```bash
-# In your .env file
-LLM_GPU_LAYERS=33
-LLM_THREADS=8
-LLM_USE_MLOCK=true
-LLM_NGL=33
-LLM_MAIN_GPU=0
-```
-
-## 📋 **What the Setup Does**
-
-The `setup.sh` script runs **once** and:
-- ✅ Checks prerequisites (Docker, Docker Compose)
-- ✅ Creates necessary directories (`data`, `models`, `voices`, `logs`)
-- ✅ Builds the Docker image
-- ✅ Shows you how to start/stop the application
-
-## 🎯 **Mock Mode (Default)**
-
-The application runs in **mock mode by default** - no real hardware or models needed:
-- **Mock LLM**: Returns hardcoded responses
-- **Mock TTS**: Plays sample audio or generates tones
-- **Mock STT**: Returns hardcoded text
-- **Mock Audio**: No real microphone/speaker needed
-
-## 🎙️ **Ambient Listening Mode**
-
-The assistant supports **always-on ambient listening** that continuously monitors for speech in the background:
-
-### **How It Works**
-- **Ambient Mode**: Continuously listens and logs detected speech without processing it
-- **Wake Word Mode**: After wake word detection, speech is processed for 5 seconds (configurable)
-- **Dual-Mode Tagging**: All detected speech is tagged as either "ambient" or "wakeword"
-
-### **Configuration**
-```bash
-# Enable ambient listening
-AMBIENT_STT_ENABLED=true
-
-# Use lighter model for better performance
-AMBIENT_STT_MODEL_PATH=models/vosk-model-small-en-us-0.15
-
-# Lower confidence threshold for ambient mode
-AMBIENT_STT_CONFIDENCE_THRESHOLD=0.3
-
-# Wake word timeout (seconds to stay in wakeword mode)
-AMBIENT_STT_WAKE_WORD_TIMEOUT=5.0
-
-# Frame skip for performance (1=all frames, 2=every other frame)
-AMBIENT_STT_FRAME_SKIP=1
-
-# Use mock mode for testing without Vosk models
-MOCK_AMBIENT_STT=true
-```
-
-### **Behavior**
-- **Ambient speech**: Logged only, no animations or responses
-- **Wake word speech**: Full processing with animations, LLM, and TTS
-
-### **Performance Tips**
-- Use `vosk-model-small-en-us-0.15` (40MB) instead of larger models
-- Increase `AMBIENT_STT_FRAME_SKIP` to reduce CPU usage
-- Set `AMBIENT_STT_ENABLED=false` to disable when not needed
-
-## 🔧 **Configuration**
-
-### **Simple Provider-Based Configuration**
-
-Edit `.env` to change providers:
-
-```bash
-# Mock Mode (default: true for testing)
-MOCK_MODE=true
-
-# LLM Provider (mock = hardcoded responses, local = real model)
-LLM_PROVIDER_TYPE=mock
-LLM_MODEL=mock-llm-v1.0
-LLM_TEMPERATURE=0.7
-LLM_MAX_TOKENS=512
-
-# TTS Engine (mock = hardcoded audio, piper = real TTS)
-TTS_ENGINE=mock
-TTS_MODEL_PATH=mock
-TTS_RATE=150
-TTS_VOLUME=1.0
-```
-
-### **How It Works**
-
-- **`LLM_PROVIDER_TYPE=mock`** → All LLM config ignored, uses hardcoded responses
-- **`TTS_ENGINE=mock`** → All TTS config ignored, uses hardcoded audio
-- **`MOCK_MODE=true`** → Forces all providers to mock mode
-
-### **Real Hardware Mode**
-
-To use real hardware, change providers in `.env`:
-```bash
-MOCK_MODE=false
-LLM_PROVIDER_TYPE=local
-TTS_ENGINE=piper
-```
-
-## 🎮 **Common Commands**
-
-### **Using Build Scripts (Recommended)**
+If that fails:
 ```powershell
-# Windows - Build and start
-.\build.ps1 -Detached
-
-# Windows - Fresh build (no cache)
-.\build.ps1 -NoCache -Detached
+pip install https://github.com/intxcc/pyaudio_portaudio/releases/download/v19.7.6/PyAudio-0.2.14-cp312-cp312-win_amd64.whl
 ```
+
+**Linux:**
 ```bash
-# Linux/macOS - Build and start
-./build.sh --detached
-
-# Linux/macOS - Fresh build
-./build.sh --no-cache --detached
+sudo apt-get install python3-pyaudio portaudio19-dev
+pip install pyaudio
 ```
 
-### **Using Makefile**
+### No Audio Input/Output
+
+- Check microphone/speaker permissions in system settings
+- Ensure default audio devices are properly configured
+- Test with: `python -m speech_recognition` (should show microphone input)
+
+### Wake Word Not Detected
+
+- Speak clearly at normal volume
+- Ensure microphone is working properly
+- The default threshold is 0.5 (edit in code to adjust sensitivity)
+- Check available models with the service (shown at startup)
+
+### Voice Model Not Found
+
 ```bash
-make dev          # Build and start
-make build        # Just build
-make logs         # View logs
-make down         # Stop
-make restart      # Restart
-make help         # See all commands
+# Download a voice model
+python download_voice.py
+
+# Or manually place .onnx and .onnx.json files in:
+# Windows: C:\Users\YourName\.local\share\piper\voices\
+# Linux: ~/.local/share/piper/voices/
 ```
 
-### **Using Docker Compose Directly**
+## Configuration
+
+Edit `.env` to customize settings:
+- Wake word detection parameters
+- Audio device settings
+- Model paths
+- Logging levels
+
+## Development
+
+**Running tests:**
 ```bash
-# Start application
-docker-compose up --build -d
+# Test TTS
+python tts_service.py "This is a test"
 
-# View logs
-docker-compose logs -f
-
-# Stop application
-docker-compose down
-
-# Restart application
-docker-compose restart
-
-# Check status
-docker-compose ps
+# Test STT (interactive)
+python stt_service.py
 ```
 
-📚 **See [DOCKER_QUICK_REFERENCE.md](DOCKER_QUICK_REFERENCE.md) for complete command reference**
+## License
 
-## 🐛 **Troubleshooting**
+MIT
 
-### **Container Won't Start**
-```bash
-# Check logs
-docker-compose logs
+## Credits
 
-# Rebuild if needed
-docker-compose down
-docker-compose up --build -d
-```
-
-### **Mock Mode Not Working**
-```bash
-# Check environment variables
-docker exec voice-assistant env | grep MOCK
-
-# Restart with mock mode
-docker-compose restart
-```
-
-## 📚 **Documentation**
-
-- **[DOCKER_QUICK_REFERENCE.md](DOCKER_QUICK_REFERENCE.md)** - Quick command reference and common tasks
-- **[DOCKER_BUILD_OPTIMIZATION.md](DOCKER_BUILD_OPTIMIZATION.md)** - BuildKit setup and optimization details
-- **[QUICK_START.md](QUICK_START.md)** - Detailed getting started guide
-- **[CONFIGURATION_GUIDE.md](CONFIGURATION_GUIDE.md)** - Configuration options and environment variables
-- **[DEVELOPMENT_DEPLOYMENT_GUIDE.md](DEVELOPMENT_DEPLOYMENT_GUIDE.md)** - Full deployment guide
-
-## ✅ **That's It!**
-
-1. **Use `.\build.ps1 -Detached` (Windows) or `./build.sh --detached` (Linux)** to build and start
-2. **Or use `make dev`** for quick development
-3. **Use `docker-compose down`** to stop
-4. **Edit `.env`** to change settings
-
-**Simple, clean, and works everywhere!**
+- **Piper-TTS**: https://github.com/rhasspy/piper
+- **OpenWakeWord**: https://github.com/dscripka/openWakeWord
+- **SpeechRecognition**: https://github.com/Uberi/speech_recognition
