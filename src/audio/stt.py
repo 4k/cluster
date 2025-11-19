@@ -29,6 +29,9 @@ class STTConfig:
     max_alternatives: int = 3
     grammar: Optional[List[str]] = None
     timeout: float = 10.0
+    # Endpoint mode: 'default', 'short', 'long', 'very_long'
+    # Controls how long the system waits before considering speech finished
+    endpoint_mode: str = "long"  # Use 'long' to reduce sentence splitting
 
 
 class VoskSTT:
@@ -58,26 +61,37 @@ class VoskSTT:
         try:
             # Import Vosk
             import vosk
-            
+
             # Load model
             self.model = vosk.Model(self.config.model_path)
             self.recognizer = vosk.KaldiRecognizer(
-                self.model, 
+                self.model,
                 self.config.sample_rate
             )
-            
+
             # Set partial results
             self.recognizer.SetWords(self.config.words)
             self.recognizer.SetPartialWords(self.config.partial_results)
-            
+
+            # Set endpoint mode to reduce sentence splitting
+            endpoint_mode_map = {
+                'default': vosk.EndpointerMode.DEFAULT,
+                'short': vosk.EndpointerMode.SHORT,
+                'long': vosk.EndpointerMode.LONG,
+                'very_long': vosk.EndpointerMode.VERY_LONG
+            }
+            mode = endpoint_mode_map.get(self.config.endpoint_mode.lower(), vosk.EndpointerMode.LONG)
+            self.recognizer.SetEndpointerMode(mode)
+            logger.info(f"Vosk STT endpoint mode set to: {self.config.endpoint_mode}")
+
             # Set grammar if provided
             if self.config.grammar:
                 grammar = json.dumps(self.config.grammar)
                 self.recognizer.SetGrammar(grammar)
-            
+
             self.is_initialized = True
             logger.info(f"Vosk STT initialized with model: {self.config.model_path}")
-            
+
         except ImportError:
             logger.error("Vosk not available, using mock implementation")
             self.model = None

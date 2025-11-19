@@ -70,7 +70,8 @@ class AssistantConfig:
         "enabled": True,
         "model_path": "models/stt",
         "confidence_threshold": 0.5,
-        "language": "en"
+        "language": "en",
+        "endpoint_mode": "long"  # Options: 'default', 'short', 'long', 'very_long'
     })
     
     # AI settings
@@ -259,6 +260,7 @@ class ConfigManager:
             "LLM_MEMORY_MAX_TOKENS": "llm.memory_max_tokens",
             "LLM_MEMORY_FILE": "llm.memory_file",
             "LLM_MEMORY_MAX_ENTRIES": "llm.memory_max_entries",
+            "STT_ENDPOINT_MODE": "stt.endpoint_mode",
             "MOCK_LLM": "mock_llm",
             "MOCK_TTS": "mock_tts",
             "MOCK_STT": "mock_stt",
