@@ -72,6 +72,16 @@ class AssistantConfig:
         "confidence_threshold": 0.5,
         "language": "en"
     })
+
+    ambient_stt: Dict[str, Any] = field(default_factory=lambda: {
+        "enabled": True,
+        "model_path": "models/vosk-model-small-en-us-0.15",
+        "confidence_threshold": 0.3,
+        "language": "en",
+        "wake_word_timeout": 5.0,
+        "frame_skip": 1,
+        "min_confidence": 0.3
+    })
     
     # AI settings
     # Note: model_id references models.json, not a path
@@ -94,6 +104,7 @@ class AssistantConfig:
     mock_llm: bool = False
     mock_tts: bool = False
     mock_stt: bool = False
+    mock_ambient_stt: bool = False
     mock_display: bool = False
     mock_audio: bool = False
     
@@ -262,8 +273,17 @@ class ConfigManager:
             "MOCK_LLM": "mock_llm",
             "MOCK_TTS": "mock_tts",
             "MOCK_STT": "mock_stt",
+            "MOCK_AMBIENT_STT": "mock_ambient_stt",
             "MOCK_DISPLAY": "mock_display",
             "MOCK_AUDIO": "mock_audio",
+            # Ambient STT configuration
+            "AMBIENT_STT_ENABLED": "ambient_stt.enabled",
+            "AMBIENT_STT_MODEL_PATH": "ambient_stt.model_path",
+            "AMBIENT_STT_CONFIDENCE_THRESHOLD": "ambient_stt.confidence_threshold",
+            "AMBIENT_STT_LANGUAGE": "ambient_stt.language",
+            "AMBIENT_STT_WAKE_WORD_TIMEOUT": "ambient_stt.wake_word_timeout",
+            "AMBIENT_STT_FRAME_SKIP": "ambient_stt.frame_skip",
+            "AMBIENT_STT_MIN_CONFIDENCE": "ambient_stt.min_confidence",
             "CONVERSATION_MAX_HISTORY": "conversation.max_history",
             "CONVERSATION_RESPONSE_THRESHOLD": "conversation.response_threshold",
             "CONVERSATION_ENABLE_MEMORY": "conversation.enable_memory",
@@ -296,6 +316,7 @@ class ConfigManager:
         mock_llm = os.getenv('MOCK_LLM', '').lower() == 'true'
         mock_tts = os.getenv('MOCK_TTS', '').lower() == 'true'
         mock_stt = os.getenv('MOCK_STT', '').lower() == 'true'
+        mock_ambient_stt = os.getenv('MOCK_AMBIENT_STT', '').lower() == 'true'
         mock_display = os.getenv('MOCK_DISPLAY', '').lower() == 'true'
         mock_audio = os.getenv('MOCK_AUDIO', '').lower() == 'true'
         
@@ -306,12 +327,14 @@ class ConfigManager:
             mock_tts = config_data.get('mock_tts', False)
         if not mock_stt:
             mock_stt = config_data.get('mock_stt', False)
+        if not mock_ambient_stt:
+            mock_ambient_stt = config_data.get('mock_ambient_stt', False)
         if not mock_display:
             mock_display = config_data.get('mock_display', False)
         if not mock_audio:
             mock_audio = config_data.get('mock_audio', False)
-        
-        logger.info(f"Mock mode check: MOCK_LLM={mock_llm}, MOCK_TTS={mock_tts}, MOCK_STT={mock_stt}, MOCK_DISPLAY={mock_display}, MOCK_AUDIO={mock_audio}")
+
+        logger.info(f"Mock mode check: MOCK_LLM={mock_llm}, MOCK_TTS={mock_tts}, MOCK_STT={mock_stt}, MOCK_AMBIENT_STT={mock_ambient_stt}, MOCK_DISPLAY={mock_display}, MOCK_AUDIO={mock_audio}")
         
         # Apply mock LLM if enabled
         if mock_llm:
@@ -336,7 +359,12 @@ class ConfigManager:
         if mock_stt:
             config_data['mock_stt'] = True
             logger.info("MOCK_STT=true - using mock STT")
-        
+
+        # Apply mock ambient STT if enabled
+        if mock_ambient_stt:
+            config_data['mock_ambient_stt'] = True
+            logger.info("MOCK_AMBIENT_STT=true - using mock ambient STT")
+
         # Apply mock display if enabled
         if mock_display:
             config_data['mock_display'] = True
@@ -367,7 +395,11 @@ class ConfigManager:
         # Note: STT mock is handled in the STT creation logic
         if config.mock_stt:
             logger.info("Mock STT enabled - using mock STT")
-        
+
+        # Note: Ambient STT mock is handled in the ambient STT creation logic
+        if config.mock_ambient_stt:
+            logger.info("Mock Ambient STT enabled - using mock ambient STT")
+
         if config.mock_display:
             logger.info("Mock display enabled - using mock display")
         
@@ -426,9 +458,11 @@ class ConfigManager:
             display=display_config,
             camera=camera_config,
             llm=config_data.get('llm', {}),
+            ambient_stt=config_data.get('ambient_stt', {}),
             mock_llm=config_data.get('mock_llm', False),
             mock_tts=config_data.get('mock_tts', False),
             mock_stt=config_data.get('mock_stt', False),
+            mock_ambient_stt=config_data.get('mock_ambient_stt', False),
             mock_display=config_data.get('mock_display', False),
             mock_audio=config_data.get('mock_audio', False),
             conversation=config_data.get('conversation', {}),
