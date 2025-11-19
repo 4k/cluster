@@ -72,21 +72,31 @@ class STTService:
             raise
 
         # Initialize Vosk speech recognition
-        logger.info(f"Loading Vosk model from '{vosk_model_path}'...")
+        logger.info(f"Loading Vosk model...")
         try:
             if vosk_model_path:
+                logger.info(f"Using specified model path: {vosk_model_path}")
                 self.vosk_model = VoskModel(vosk_model_path)
             else:
                 # Try to find model in common locations
                 import os
+                import glob
+
                 possible_paths = [
+                    # Check models/vosk directory first
+                    "models/vosk/vosk-model-small-en-us-0.15",
+                    "models/vosk/vosk-model-en-us-0.22",
+                    # Also check direct subdirectories in models/vosk
+                    *glob.glob("models/vosk/vosk-model-*"),
+                    # Other common locations
                     "models/vosk-model-small-en-us-0.15",
                     "vosk-model-small-en-us-0.15",
                     os.path.expanduser("~/.cache/vosk/vosk-model-small-en-us-0.15"),
                 ]
+
                 found = False
                 for path in possible_paths:
-                    if os.path.exists(path):
+                    if os.path.exists(path) and os.path.isdir(path):
                         logger.info(f"Found Vosk model at: {path}")
                         self.vosk_model = VoskModel(path)
                         found = True
@@ -97,7 +107,8 @@ class STTService:
                         "Vosk model not found. Please download a model from:\n"
                         "https://alphacephei.com/vosk/models\n"
                         "Example: vosk-model-small-en-us-0.15\n"
-                        "Extract it and pass the path with --vosk-model argument"
+                        "Extract it to: models/vosk/vosk-model-small-en-us-0.15\n"
+                        "Or pass the path with --vosk-model argument"
                     )
 
             logger.info(f"Vosk model loaded successfully")
