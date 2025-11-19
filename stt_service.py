@@ -118,7 +118,9 @@ class STTService:
             str: Transcribed text or None if recognition failed
         """
         try:
-            with sr.Microphone(device_index=self.device_index, sample_rate=self.sample_rate) as source:
+            # Use device's native sample rate (stored during start())
+            actual_rate = getattr(self, 'actual_sample_rate', self.sample_rate)
+            with sr.Microphone(device_index=self.device_index, sample_rate=actual_rate) as source:
                 logger.info("Listening for speech...")
                 print("\n🎤 Listening... (speak now)")
 
@@ -177,20 +179,32 @@ class STTService:
             device_channels = int(device_info['maxInputChannels'])
             device_sample_rate = int(device_info['defaultSampleRate'])
 
-            # Use device's native channels if available
+            # Use device's native channels and sample rate
             input_channels = min(device_channels, 2)  # Use mono or stereo
+            input_sample_rate = device_sample_rate  # Use device's native rate
+
             logger.info(f"Device capabilities: {device_channels} channels, {device_sample_rate} Hz")
-            logger.info(f"Using: {input_channels} channel(s), {self.sample_rate} Hz")
+            logger.info(f"Using: {input_channels} channel(s), {input_sample_rate} Hz")
+
+            # Adjust chunk size for different sample rate
+            # Original: 1280 frames at 16kHz = 80ms
+            # Scale chunk size to maintain ~80ms duration
+            adjusted_chunk_size = int(self.chunk_size * input_sample_rate / self.sample_rate)
+            logger.info(f"Adjusted chunk size: {adjusted_chunk_size} frames (~80ms)")
 
             # Open audio stream with device's supported parameters
             stream = audio.open(
                 format=self.format,
                 channels=input_channels,
-                rate=self.sample_rate,
+                rate=input_sample_rate,
                 input=True,
                 input_device_index=self.device_index,
-                frames_per_buffer=self.chunk_size
+                frames_per_buffer=adjusted_chunk_size
             )
+
+            # Store actual parameters for processing
+            self.actual_sample_rate = input_sample_rate
+            self.actual_chunk_size = adjusted_chunk_size
 
             # Store channels for processing
             self.input_channels = input_channels
@@ -199,6 +213,8 @@ class STTService:
             print(f"\n{'='*60}")
             print(f"👂 Listening for wake word: '{self.wake_word.upper()}'")
             print(f"   Audio Device: [{self.device_index}] {device_info['name']}")
+            print(f"   Sample Rate: {input_sample_rate} Hz (device native)")
+            print(f"   Channels: {input_channels} ({'Stereo' if input_channels == 2 else 'Mono'})")
             print(f"   Detection Threshold: {self.threshold}")
             print(f"   Available models: {', '.join(list(self.wake_word_model.models.keys()))}")
             print(f"")
@@ -208,8 +224,8 @@ class STTService:
 
             while self.is_running:
                 try:
-                    # Read audio data
-                    audio_data = stream.read(self.chunk_size, exception_on_overflow=False)
+                    # Read audio data (using adjusted chunk size)
+                    audio_data = stream.read(self.actual_chunk_size, exception_on_overflow=False)
 
                     # Convert to numpy array (float32, normalized to -1.0 to 1.0)
                     audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
@@ -218,6 +234,15 @@ class STTService:
                     if self.input_channels == 2:
                         # Reshape to (samples, channels) and average across channels
                         audio_array = audio_array.reshape(-1, 2).mean(axis=1)
+
+                    # Resample to 16kHz if needed (wake word model expects 16kHz)
+                    if self.actual_sample_rate != 16000:
+                        # Simple decimation for downsampling (works for common rates like 44100->16000, 48000->16000)
+                        downsample_factor = self.actual_sample_rate / 16000
+                        if downsample_factor > 1:
+                            # Take every Nth sample
+                            indices = np.arange(0, len(audio_array), downsample_factor).astype(int)
+                            audio_array = audio_array[indices]
 
                     # Check for wake word
                     detected, model_name, score = self._detect_wake_word(audio_array)
