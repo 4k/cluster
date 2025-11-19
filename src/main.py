@@ -17,6 +17,7 @@ from core.config import ConfigManager
 from core.event_bus import EventBus, EventType
 from core.types import EmotionType, GazeDirection
 from audio.audio_manager import AudioManager, AudioManagerConfig
+from audio.ambient_stt import AmbientSTTConfig
 from voice.simple_tts_manager import SimpleTTSManager
 from display.simple_display_manager import DisplayManager, DisplayConfig
 from ai.llm_manager import LLMManager
@@ -133,12 +134,27 @@ class Cluster:
         """Initialize all components."""
         try:
             # Initialize audio manager
+            # Create AmbientSTTConfig from config dict
+            ambient_stt_config = AmbientSTTConfig(
+                enabled=self.config.ambient_stt.get('enabled', True),
+                model_path=self.config.ambient_stt.get('model_path', 'models/vosk-model-small-en-us-0.15'),
+                language=self.config.ambient_stt.get('language', 'en'),
+                sample_rate=self.config.audio.sample_rate,
+                confidence_threshold=self.config.ambient_stt.get('confidence_threshold', 0.3),
+                wake_word_timeout=self.config.ambient_stt.get('wake_word_timeout', 5.0),
+                frame_skip=self.config.ambient_stt.get('frame_skip', 1),
+                min_confidence=self.config.ambient_stt.get('min_confidence', 0.3)
+            )
+
             audio_config = AudioManagerConfig(
                 audio=self.config.audio,
                 vad=self.config.vad,
                 wake_word=self.config.wake_word,
                 stt=self.config.stt,
-                mock_mode=self.config.development.get('mock_audio', False) or self.config.mock_stt
+                ambient_stt=ambient_stt_config,
+                mock_mode=self.config.development.get('mock_audio', False) or self.config.mock_stt,
+                mock_ambient_stt=self.config.mock_ambient_stt,
+                enable_ambient_stt=ambient_stt_config.enabled
             )
             self.audio_manager = AudioManager(audio_config)
             await self.audio_manager.initialize()
@@ -188,6 +204,10 @@ class Cluster:
         self.event_bus.subscribe(EventType.SPEECH_DETECTED, self._on_speech_detected)
         self.event_bus.subscribe(EventType.SPEECH_ENDED, self._on_speech_ended)
 
+        # Ambient speech events
+        self.event_bus.subscribe(EventType.AMBIENT_SPEECH_DETECTED, self._on_ambient_speech_detected)
+        self.event_bus.subscribe(EventType.WAKEWORD_SPEECH_DETECTED, self._on_wakeword_speech_detected)
+
         # TTS events
         self.event_bus.subscribe(EventType.TTS_STARTED, self._on_tts_started)
         self.event_bus.subscribe(EventType.TTS_COMPLETED, self._on_tts_completed)
@@ -228,7 +248,35 @@ class Cluster:
         """Handle speech end."""
         # No display update - animation engine handles state transitions
         pass
-    
+
+    async def _on_ambient_speech_detected(self, event) -> None:
+        """Handle ambient speech detection (background listening)."""
+        text = event.data.get('text', '')
+        confidence = event.data.get('confidence', 0.0)
+        mode = event.data.get('mode', 'ambient')
+
+        logger.info(f"[AMBIENT] Speech detected: '{text}' (confidence: {confidence:.3f})")
+
+        # You can choose to process ambient speech or just log it
+        # For now, we'll just log it without triggering animations
+        # Uncomment below to process ambient speech through LLM:
+        # await self._process_speech(text, confidence)
+
+    async def _on_wakeword_speech_detected(self, event) -> None:
+        """Handle wake word triggered speech detection."""
+        text = event.data.get('text', '')
+        confidence = event.data.get('confidence', 0.0)
+        mode = event.data.get('mode', 'wakeword')
+
+        logger.info(f"[WAKEWORD] Speech detected: '{text}' (confidence: {confidence:.3f})")
+
+        # Tell animation engine to show processing state
+        if self.animation_engine:
+            await self.animation_engine.on_speech_detected()
+
+        # Process the speech (LLM generation) - wake word triggered speech is active
+        await self._process_speech(text, confidence)
+
     async def _on_tts_started(self, event) -> None:
         """Handle TTS start."""
         # Tell animation engine to start speaking animations

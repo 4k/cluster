@@ -18,6 +18,7 @@ from core.event_bus import EventBus, EventType, emit_event
 from audio.vad import create_vad, VADConfig, SileroVAD, MockVAD
 from audio.wake_word import create_wake_word_detector, WakeWordConfig, SileroWakeWordDetector, MockWakeWordDetector
 from audio.stt import create_stt, STTConfig, VoskSTT, MockSTT
+from audio.ambient_stt import create_ambient_stt, AmbientSTTConfig, AmbientSTT, MockAmbientSTT
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +30,13 @@ class AudioManagerConfig:
     vad: VADConfig
     wake_word: WakeWordConfig
     stt: STTConfig
+    ambient_stt: AmbientSTTConfig
     mock_mode: bool = False
+    mock_ambient_stt: bool = False
     enable_vad: bool = True
     enable_wake_word: bool = True
     enable_stt: bool = True
+    enable_ambient_stt: bool = True
 
 
 class AudioManager:
@@ -47,6 +51,7 @@ class AudioManager:
         self.vad: Optional[SileroVAD] = None
         self.wake_word_detector: Optional[SileroWakeWordDetector] = None
         self.stt: Optional[VoskSTT] = None
+        self.ambient_stt: Optional[AmbientSTT] = None
         
         # Audio stream
         self.audio_stream: Optional[sd.InputStream] = None
@@ -63,6 +68,8 @@ class AudioManager:
         self.on_speech_detected: Optional[Callable] = None
         self.on_wake_word_detected: Optional[Callable] = None
         self.on_text_recognized: Optional[Callable] = None
+        self.on_ambient_speech: Optional[Callable] = None
+        self.on_wakeword_speech: Optional[Callable] = None
         
         # Threading
         self._audio_thread: Optional[threading.Thread] = None
@@ -91,7 +98,16 @@ class AudioManager:
                 self.stt = create_stt(self.config.stt, mock=self.config.mock_mode)
                 await self.stt.initialize()
                 self._setup_stt_callbacks()
-            
+
+            # Initialize Ambient STT
+            if self.config.enable_ambient_stt:
+                self.ambient_stt = create_ambient_stt(
+                    self.config.ambient_stt,
+                    mock=self.config.mock_ambient_stt or self.config.mock_mode
+                )
+                await self.ambient_stt.initialize()
+                self._setup_ambient_stt_callbacks()
+
             # Initialize audio stream
             await self._initialize_audio_stream()
             
@@ -215,7 +231,11 @@ class AudioManager:
         async def on_wake_word_detected(activation_record: Dict[str, Any]):
             logger.info(f"Wake word detected: {activation_record['wake_word']} "
                        f"(confidence: {activation_record['confidence']:.3f})")
-            
+
+            # Notify ambient STT about wake word detection
+            if self.ambient_stt:
+                self.ambient_stt.on_wake_word_detected(time.time())
+
             # Call user callback
             if self.on_wake_word_detected:
                 await self._call_callback(self.on_wake_word_detected, activation_record)
@@ -259,7 +279,35 @@ class AudioManager:
             on_utterance_start=on_utterance_start,
             on_utterance_end=on_utterance_end
         )
-    
+
+    def _setup_ambient_stt_callbacks(self) -> None:
+        """Setup Ambient STT callbacks."""
+        if not self.ambient_stt:
+            return
+
+        async def on_ambient_result(result_data: Dict[str, Any]):
+            logger.info(f"Ambient speech: '{result_data['text']}' (confidence: {result_data['confidence']:.3f})")
+
+            # Call user callback
+            if self.on_ambient_speech:
+                await self._call_callback(self.on_ambient_speech, result_data)
+
+        async def on_wakeword_result(result_data: Dict[str, Any]):
+            logger.info(f"Wake word speech: '{result_data['text']}' (confidence: {result_data['confidence']:.3f})")
+
+            # Call user callback
+            if self.on_wakeword_speech:
+                await self._call_callback(self.on_wakeword_speech, result_data)
+
+        async def on_partial_result(result_data: Dict[str, Any]):
+            logger.debug(f"Ambient partial [{result_data['mode']}]: '{result_data['text']}'")
+
+        self.ambient_stt.set_callbacks(
+            on_ambient_result=on_ambient_result,
+            on_wakeword_result=on_wakeword_result,
+            on_partial_result=on_partial_result
+        )
+
     async def _call_callback(self, callback: Callable, *args) -> None:
         """Call a callback function safely."""
         try:
@@ -333,7 +381,11 @@ class AudioManager:
                     # Process with STT (only if listening)
                     if self.stt and self.is_listening:
                         stt_result = asyncio.run(self.stt.process_audio(audio_frame))
-                    
+
+                    # Process with Ambient STT (always active if enabled)
+                    if self.ambient_stt:
+                        ambient_result = asyncio.run(self.ambient_stt.process_audio(audio_frame))
+
                     # Call audio data callback
                     if self.on_audio_data:
                         asyncio.create_task(self._call_callback(self.on_audio_data, audio_frame))
@@ -347,12 +399,16 @@ class AudioManager:
     def set_callbacks(self, on_audio_data: Optional[Callable] = None,
                      on_speech_detected: Optional[Callable] = None,
                      on_wake_word_detected: Optional[Callable] = None,
-                     on_text_recognized: Optional[Callable] = None) -> None:
+                     on_text_recognized: Optional[Callable] = None,
+                     on_ambient_speech: Optional[Callable] = None,
+                     on_wakeword_speech: Optional[Callable] = None) -> None:
         """Set callback functions for audio events."""
         self.on_audio_data = on_audio_data
         self.on_speech_detected = on_speech_detected
         self.on_wake_word_detected = on_wake_word_detected
         self.on_text_recognized = on_text_recognized
+        self.on_ambient_speech = on_ambient_speech
+        self.on_wakeword_speech = on_wakeword_speech
     
     def get_state(self) -> Dict[str, Any]:
         """Get current audio manager state."""
@@ -371,7 +427,9 @@ class AudioManager:
             state["wake_word"] = self.wake_word_detector.get_state()
         if self.stt:
             state["stt"] = self.stt.get_state()
-        
+        if self.ambient_stt:
+            state["ambient_stt"] = self.ambient_stt.get_state()
+
         return state
     
     def get_audio_devices(self) -> List[Dict[str, Any]]:
@@ -421,7 +479,9 @@ class AudioManager:
             self.wake_word_detector.cleanup()
         if self.stt:
             self.stt.cleanup()
-        
+        if self.ambient_stt:
+            self.ambient_stt.cleanup()
+
         # Close audio stream
         if self.audio_stream:
             self.audio_stream.close()

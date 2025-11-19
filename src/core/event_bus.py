@@ -28,6 +28,10 @@ class EventType(Enum):
     AUDIO_PLAYBACK_STARTED = "audio_playback_started"
     AUDIO_PLAYBACK_PROGRESS = "audio_playback_progress"
     AUDIO_PLAYBACK_ENDED = "audio_playback_ended"
+
+    # Ambient Speech Events
+    AMBIENT_SPEECH_DETECTED = "ambient_speech_detected"  # Ambient mode speech
+    WAKEWORD_SPEECH_DETECTED = "wakeword_speech_detected"  # Wake word triggered speech
     
     # AI/Decision Events
     CONVERSATION_UPDATED = "conversation_updated"
