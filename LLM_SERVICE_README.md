@@ -2,6 +2,15 @@
 
 Standalone LLM service that connects to Ollama instance at `http://192.168.1.144:11434`
 
+## Features
+
+✓ Auto-detection of API endpoints
+✓ Support for multiple API types (Ollama native, OpenAI-compatible)
+✓ Authentication support
+✓ Streaming responses
+✓ Comprehensive diagnostics
+✓ Enhanced error reporting
+
 ## Installation
 
 ```bash
@@ -10,19 +19,35 @@ pip install -r llm_requirements.txt
 
 ## Usage
 
-### Run the example
+### Run diagnostics
 
 ```bash
 python llm_service.py
 ```
+
+This will:
+1. Auto-detect the working API endpoint
+2. Run comprehensive diagnostics
+3. Test connection and list models
+4. Run example requests
 
 ### Use in your code
 
 ```python
 from llm_service import LLMService
 
-# Initialize service
+# Initialize service (auto-detects best endpoint)
 llm = LLMService("http://192.168.1.144:11434")
+
+# Or specify API type explicitly
+llm = LLMService(
+    base_url="http://192.168.1.144:11434",
+    api_type="auto",  # auto|ollama-generate|ollama-chat|openai
+    api_key=None  # optional auth token
+)
+
+# Run diagnostics
+llm.diagnose()
 
 # Check connection
 if llm.check_connection():
@@ -47,8 +72,14 @@ if llm.check_connection():
 
 ## API
 
-### LLMService(base_url)
+### LLMService(base_url, api_key=None, api_type="auto")
 Initialize the service with Ollama URL
+- `base_url`: Ollama instance URL
+- `api_key`: Optional authentication token
+- `api_type`: API endpoint type (auto-detects by default)
+
+### diagnose()
+Run comprehensive endpoint diagnostics to identify connectivity issues
 
 ### send_request(prompt, model, stream, **kwargs)
 Send a request to Ollama
@@ -67,15 +98,45 @@ Send a chat message
 ### check_connection()
 Verify Ollama is accessible and list available models
 
-## Features
+## Troubleshooting
 
-✓ Simple request/response interface
-✓ Streaming support
-✓ Chat with system prompts
-✓ Custom parameters (temperature, max_tokens, etc.)
-✓ Connection checking
-✓ Error handling
-✓ Response printing
+### Getting 403 Access Denied
+
+If you see "403 Access denied" errors:
+
+1. **Check if there's a proxy** (like Envoy) in front of Ollama
+2. **Find the correct URL** - Check what URL Open WebUI uses (in its settings/config)
+3. **Check Docker port mapping** - Ollama usually runs on port 11434, but Docker might expose it differently
+4. **Try different ports** - Common alternatives: 8080, 3000, 11435
+5. **Authentication** - Some setups require an API key
+
+### Finding your Ollama URL
+
+```bash
+# Check Docker container ports
+docker ps | grep ollama
+
+# Check Unraid container settings
+# Look at "Port Mappings" section
+
+# Check Open WebUI configuration
+# Settings > Admin > Connections > Ollama API URL
+```
+
+### Testing with different URLs
+
+```python
+# Try different URL/port combinations
+llm = LLMService("http://192.168.1.144:11434")  # Default
+llm = LLMService("http://192.168.1.144:8080")   # Alternative
+llm = LLMService("http://localhost:11434")       # Local
+
+# With authentication
+llm = LLMService(
+    base_url="http://192.168.1.144:11434",
+    api_key="your-api-key"
+)
+```
 
 ## Notes
 
@@ -83,3 +144,4 @@ Verify Ollama is accessible and list available models
 - Responses are printed to console
 - Default timeout is 120 seconds
 - Default model is "llama3.2"
+- Automatically detects the best API endpoint
