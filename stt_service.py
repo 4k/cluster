@@ -200,38 +200,50 @@ class STTService:
 
             logger.info(f"Device capabilities: {device_channels} channels, {device_sample_rate} Hz")
 
+            # openWakeWord requires 16kHz audio
+            # Try 16kHz first, fallback to device rate if that fails
+            sample_rate_options = [16000]
+            if device_sample_rate != 16000:
+                sample_rate_options.append(device_sample_rate)
+
             # Try different configurations to find one that works
             # Some devices report stereo but only work in mono
-            channel_options = [min(device_channels, 2), 1] if device_channels >= 2 else [1]
-            buffer_sizes = [1024, 2048, 4096, 8192]
+            channel_options = [1, 2] if device_channels >= 2 else [1]
+            # Use 1280 samples for 80ms at 16kHz (openWakeWord recommendation)
+            buffer_sizes = [1280, 1024, 2048, 4096]
 
             stream = None
             last_error = None
             input_channels = None
+            input_sample_rate = None
             adjusted_chunk_size = None
 
-            # Try each combination of channels and buffer size
-            for test_channels in channel_options:
-                for buffer_size in buffer_sizes:
-                    try:
-                        logger.info(f"Trying: {test_channels} channel(s), {device_sample_rate} Hz, buffer={buffer_size}")
-                        stream = audio.open(
-                            format=self.format,
-                            channels=test_channels,
-                            rate=device_sample_rate,
-                            input=True,
-                            input_device_index=self.device_index,
-                            frames_per_buffer=buffer_size
-                        )
-                        logger.info(f"✓ Successfully opened stream")
-                        input_channels = test_channels
-                        input_sample_rate = device_sample_rate
-                        adjusted_chunk_size = buffer_size
+            # Try each combination
+            for test_rate in sample_rate_options:
+                for test_channels in channel_options:
+                    for buffer_size in buffer_sizes:
+                        try:
+                            logger.info(f"Trying: {test_channels}ch, {test_rate}Hz, buffer={buffer_size}")
+                            stream = audio.open(
+                                format=self.format,
+                                channels=test_channels,
+                                rate=test_rate,
+                                input=True,
+                                input_device_index=self.device_index,
+                                frames_per_buffer=buffer_size
+                            )
+                            logger.info(f"✓ Successfully opened stream")
+                            input_channels = test_channels
+                            input_sample_rate = test_rate
+                            adjusted_chunk_size = buffer_size
+                            break
+                        except OSError as e:
+                            last_error = e
+                            logger.debug(f"  Failed: {e}")
+                            continue
+
+                    if stream is not None:
                         break
-                    except OSError as e:
-                        last_error = e
-                        logger.debug(f"  Failed: {e}")
-                        continue
 
                 if stream is not None:
                     break
@@ -277,31 +289,33 @@ class STTService:
                     # Read audio data (using adjusted chunk size)
                     audio_data = stream.read(self.actual_chunk_size, exception_on_overflow=False)
 
-                    # Convert to numpy array (float32, normalized to -1.0 to 1.0)
-                    audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+                    # Convert to numpy array (int16 - as expected by openWakeWord)
+                    audio_array = np.frombuffer(audio_data, dtype=np.int16)
 
                     # Convert stereo to mono if needed (wake word model expects mono)
                     if self.input_channels == 2:
                         # Reshape to (samples, channels) and average across channels
-                        audio_array = audio_array.reshape(-1, 2).mean(axis=1)
+                        # Keep as int16
+                        audio_array = audio_array.reshape(-1, 2).mean(axis=1).astype(np.int16)
 
                     # Resample to 16kHz if needed (wake word model expects 16kHz)
                     if self.actual_sample_rate != 16000:
-                        # Simple decimation for downsampling (works for common rates like 44100->16000, 48000->16000)
-                        downsample_factor = self.actual_sample_rate / 16000
-                        if downsample_factor > 1:
-                            # Take every Nth sample
-                            indices = np.arange(0, len(audio_array), downsample_factor).astype(int)
-                            audio_array = audio_array[indices]
+                        # Use scipy for proper resampling
+                        from scipy import signal
+                        # Calculate number of samples after resampling
+                        num_samples = int(len(audio_array) * 16000 / self.actual_sample_rate)
+                        audio_array = signal.resample(audio_array, num_samples).astype(np.int16)
 
-                    # Check for wake word
+                    # Check for wake word (pass int16 data as per official example)
                     detected, model_name, score, all_scores = self._detect_wake_word(audio_array)
 
                     # Display audio level meter (update every 100ms)
                     current_time = time.time()
                     if current_time - last_update_time >= 0.1:
-                        # Calculate RMS level (root mean square)
-                        rms = np.sqrt(np.mean(audio_array ** 2))
+                        # Calculate RMS level (root mean square) for int16 data
+                        # Convert to float for calculation
+                        audio_float = audio_array.astype(np.float32) / 32768.0
+                        rms = np.sqrt(np.mean(audio_float ** 2))
                         # Scale to percentage (typical speech is 0.01-0.3 RMS)
                         level_percent = min(100, int(rms * 300))
 
