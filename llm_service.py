@@ -7,16 +7,20 @@ import requests
 import json
 from typing import Optional, Dict, Any
 
+# Default configuration constants
+DEFAULT_BASE_URL = "http://192.168.1.144:11434"
+DEFAULT_MODEL = "qwen3-coder:30b"
+
 
 class LLMService:
     """Simple LLM service that connects to Ollama"""
 
     def __init__(
         self,
-        base_url: str = "http://192.168.1.144:11434",
+        base_url: str = DEFAULT_BASE_URL,
         api_key: Optional[str] = None,
         api_type: str = "auto",
-        default_model: str = "qwen2.5-coder:32b"
+        default_model: str = DEFAULT_MODEL
     ):
         """
         Initialize LLM service
@@ -372,8 +376,8 @@ def main():
 
     # Initialize service with your model
     llm = LLMService(
-        base_url="http://192.168.1.144:11434",
-        default_model="qwen2.5-coder:32b"  # Change this to your model
+        base_url=DEFAULT_BASE_URL,
+        default_model=DEFAULT_MODEL
     )
 
     # Run diagnostics first
