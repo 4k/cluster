@@ -168,15 +168,27 @@ class STTService:
                 self.device_index = device_info['index']
                 logger.info(f"Using default audio device [{self.device_index}]: {device_info['name']}")
 
-            # Open audio stream
+            # Determine device capabilities
+            device_channels = int(device_info['maxInputChannels'])
+            device_sample_rate = int(device_info['defaultSampleRate'])
+
+            # Use device's native channels if available
+            input_channels = min(device_channels, 2)  # Use mono or stereo
+            logger.info(f"Device capabilities: {device_channels} channels, {device_sample_rate} Hz")
+            logger.info(f"Using: {input_channels} channel(s), {self.sample_rate} Hz")
+
+            # Open audio stream with device's supported parameters
             stream = audio.open(
                 format=self.format,
-                channels=self.channels,
+                channels=input_channels,
                 rate=self.sample_rate,
                 input=True,
                 input_device_index=self.device_index,
                 frames_per_buffer=self.chunk_size
             )
+
+            # Store channels for processing
+            self.input_channels = input_channels
 
             logger.info("STT Service started. Listening for wake word...")
             print(f"\n{'='*60}")
@@ -194,6 +206,11 @@ class STTService:
 
                     # Convert to numpy array (float32, normalized to -1.0 to 1.0)
                     audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+
+                    # Convert stereo to mono if needed (wake word model expects mono)
+                    if self.input_channels == 2:
+                        # Reshape to (samples, channels) and average across channels
+                        audio_array = audio_array.reshape(-1, 2).mean(axis=1)
 
                     # Check for wake word
                     detected, model_name, score = self._detect_wake_word(audio_array)
