@@ -250,31 +250,26 @@ class Cluster:
         pass
 
     async def _on_ambient_speech_detected(self, event) -> None:
-        """Handle ambient speech detection (background listening)."""
+        """
+        Handle ambient speech detection (background listening).
+        Ambient speech is logged but not processed - only wake word triggered speech is processed.
+        """
         text = event.data.get('text', '')
         confidence = event.data.get('confidence', 0.0)
-        mode = event.data.get('mode', 'ambient')
 
-        logger.info(f"[AMBIENT] Speech detected: '{text}' (confidence: {confidence:.3f})")
-
-        # You can choose to process ambient speech or just log it
-        # For now, we'll just log it without triggering animations
-        # Uncomment below to process ambient speech through LLM:
-        # await self._process_speech(text, confidence)
+        logger.info(f"[AMBIENT] '{text}' (confidence: {confidence:.3f})")
 
     async def _on_wakeword_speech_detected(self, event) -> None:
-        """Handle wake word triggered speech detection."""
+        """Handle wake word triggered speech detection and process it."""
         text = event.data.get('text', '')
         confidence = event.data.get('confidence', 0.0)
-        mode = event.data.get('mode', 'wakeword')
 
-        logger.info(f"[WAKEWORD] Speech detected: '{text}' (confidence: {confidence:.3f})")
+        logger.info(f"[WAKEWORD] '{text}' (confidence: {confidence:.3f})")
 
-        # Tell animation engine to show processing state
+        # Trigger animation and process speech
         if self.animation_engine:
             await self.animation_engine.on_speech_detected()
 
-        # Process the speech (LLM generation) - wake word triggered speech is active
         await self._process_speech(text, confidence)
 
     async def _on_tts_started(self, event) -> None:

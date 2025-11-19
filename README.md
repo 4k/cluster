@@ -64,6 +64,7 @@ All configuration is now handled through environment variables in the `.env` fil
 - `LLM_*` - Language model settings (provider, model_id, performance)
 - `TTS_*` - Text-to-speech settings (Piper only)
 - `AUDIO_*` - Audio input/output settings
+- `AMBIENT_STT_*` - Ambient listening configuration (always-on speech recognition)
 - `DISPLAY_*` - Display and animation settings
 - `MOCK_*` - Mock mode flags for testing
 - `DEVELOPMENT_*` - Development and debugging settings
@@ -101,6 +102,45 @@ The application runs in **mock mode by default** - no real hardware or models ne
 - **Mock TTS**: Plays sample audio or generates tones
 - **Mock STT**: Returns hardcoded text
 - **Mock Audio**: No real microphone/speaker needed
+
+## 🎙️ **Ambient Listening Mode**
+
+The assistant supports **always-on ambient listening** that continuously monitors for speech in the background:
+
+### **How It Works**
+- **Ambient Mode**: Continuously listens and logs detected speech without processing it
+- **Wake Word Mode**: After wake word detection, speech is processed for 5 seconds (configurable)
+- **Dual-Mode Tagging**: All detected speech is tagged as either "ambient" or "wakeword"
+
+### **Configuration**
+```bash
+# Enable ambient listening
+AMBIENT_STT_ENABLED=true
+
+# Use lighter model for better performance
+AMBIENT_STT_MODEL_PATH=models/vosk-model-small-en-us-0.15
+
+# Lower confidence threshold for ambient mode
+AMBIENT_STT_CONFIDENCE_THRESHOLD=0.3
+
+# Wake word timeout (seconds to stay in wakeword mode)
+AMBIENT_STT_WAKE_WORD_TIMEOUT=5.0
+
+# Frame skip for performance (1=all frames, 2=every other frame)
+AMBIENT_STT_FRAME_SKIP=1
+
+# Use mock mode for testing without Vosk models
+MOCK_AMBIENT_STT=true
+```
+
+### **Behavior**
+- **Ambient speech**: Logged only, no animations or responses
+- **Wake word speech**: Full processing with animations, LLM, and TTS
+
+### **Performance Tips**
+- Use `vosk-model-small-en-us-0.15` (40MB) instead of larger models
+- Increase `AMBIENT_STT_FRAME_SKIP` to reduce CPU usage
+- Set `AMBIENT_STT_ENABLED=false` to disable when not needed
 
 ## 🔧 **Configuration**
 
