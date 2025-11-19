@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
 Speech-to-Text Service with Wake Word Detection.
-Uses openwakeword to detect "Computer" wake word, then transcribes speech to text.
+Uses openwakeword to detect wake word, then transcribes speech using Vosk.
 """
 import sys
 import logging
+import json
 import numpy as np
 import pyaudio
+from vosk import Model as VoskModel, KaldiRecognizer
 from openwakeword.model import Model
-import speech_recognition as sr
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ def list_audio_devices():
 class STTService:
     """Speech-to-Text service with wake word detection."""
 
-    def __init__(self, wake_word="computer", chunk_size=1280, sample_rate=16000, threshold=0.5, device_index=None, verbose=False):
+    def __init__(self, wake_word="computer", chunk_size=1280, sample_rate=16000, threshold=0.5, device_index=None, verbose=False, vosk_model_path=None):
         """
         Initialize the STT service.
 
@@ -49,6 +50,7 @@ class STTService:
             threshold: Detection threshold 0.0-1.0 (default: 0.5)
             device_index: Audio input device index (default: None = system default)
             verbose: Show detection scores in real-time (default: False)
+            vosk_model_path: Path to Vosk model directory (default: None = auto-detect)
         """
         self.wake_word = wake_word.lower()
         self.chunk_size = chunk_size
@@ -56,6 +58,7 @@ class STTService:
         self.threshold = threshold
         self.device_index = device_index
         self.verbose = verbose
+        self.vosk_model_path = vosk_model_path
         self.is_running = False
 
         # Initialize wake word model
@@ -68,11 +71,39 @@ class STTService:
             logger.error(f"Failed to load wake word model: {e}", exc_info=True)
             raise
 
-        # Initialize speech recognizer
-        self.recognizer = sr.Recognizer()
-        # Adjust for better recognition
-        self.recognizer.energy_threshold = 300
-        self.recognizer.dynamic_energy_threshold = True
+        # Initialize Vosk speech recognition
+        logger.info(f"Loading Vosk model from '{vosk_model_path}'...")
+        try:
+            if vosk_model_path:
+                self.vosk_model = VoskModel(vosk_model_path)
+            else:
+                # Try to find model in common locations
+                import os
+                possible_paths = [
+                    "models/vosk-model-small-en-us-0.15",
+                    "vosk-model-small-en-us-0.15",
+                    os.path.expanduser("~/.cache/vosk/vosk-model-small-en-us-0.15"),
+                ]
+                found = False
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        logger.info(f"Found Vosk model at: {path}")
+                        self.vosk_model = VoskModel(path)
+                        found = True
+                        break
+
+                if not found:
+                    raise FileNotFoundError(
+                        "Vosk model not found. Please download a model from:\n"
+                        "https://alphacephei.com/vosk/models\n"
+                        "Example: vosk-model-small-en-us-0.15\n"
+                        "Extract it and pass the path with --vosk-model argument"
+                    )
+
+            logger.info(f"Vosk model loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load Vosk model: {e}", exc_info=True)
+            raise
 
         # Audio settings
         self.format = pyaudio.paInt16
@@ -129,49 +160,68 @@ class STTService:
             logger.error(f"Error in wake word detection: {e}", exc_info=True)
             return False, None, 0.0, {}
 
-    def _transcribe_speech(self):
+    def _transcribe_speech(self, audio_stream):
         """
-        Transcribe speech after wake word is detected.
+        Transcribe speech after wake word is detected using Vosk.
+
+        Args:
+            audio_stream: PyAudio stream object to record from
 
         Returns:
             str: Transcribed text or None if recognition failed
         """
         try:
-            # Use device's native sample rate (stored during start())
-            actual_rate = getattr(self, 'actual_sample_rate', self.sample_rate)
-            with sr.Microphone(device_index=self.device_index, sample_rate=actual_rate) as source:
-                logger.info("Listening for speech...")
-                print("\n🎤 Listening... (speak now)")
+            logger.info("Listening for speech...")
+            print("\n🎤 Listening... (speak now)")
 
-                # Adjust for ambient noise (quick adjustment)
-                self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
+            # Get audio parameters
+            actual_rate = getattr(self, 'actual_sample_rate', 16000)
+            chunk_size = getattr(self, 'actual_chunk_size', 1280)
 
-                # Listen for speech (with timeout and phrase limit)
-                audio = self.recognizer.listen(
-                    source,
-                    timeout=5,
-                    phrase_time_limit=10
-                )
+            # Create Vosk recognizer
+            recognizer = KaldiRecognizer(self.vosk_model, actual_rate)
+            recognizer.SetWords(True)
 
-                logger.info("Processing speech...")
-                print("⏳ Processing...")
+            # Record for 5 seconds or until silence
+            max_frames = int(actual_rate / chunk_size * 5)  # 5 seconds max
+            silent_chunks = 0
+            max_silent_chunks = int(actual_rate / chunk_size * 1.5)  # 1.5 seconds of silence
+            final_text = ""
 
-                # Recognize speech using Google Speech Recognition
-                text = self.recognizer.recognize_google(audio)
-                return text
+            for i in range(max_frames):
+                data = audio_stream.read(chunk_size, exception_on_overflow=False)
 
-        except sr.WaitTimeoutError:
-            logger.warning("No speech detected (timeout)")
-            print("⚠️  No speech detected")
-            return None
-        except sr.UnknownValueError:
-            logger.warning("Could not understand audio")
-            print("⚠️  Could not understand audio")
-            return None
-        except sr.RequestError as e:
-            logger.error(f"Speech recognition service error: {e}")
-            print(f"❌ Recognition service error: {e}")
-            return None
+                # Feed audio to Vosk
+                if recognizer.AcceptWaveform(data):
+                    result = json.loads(recognizer.Result())
+                    if result.get("text"):
+                        final_text += " " + result["text"]
+
+                # Check for silence (voice activity detection)
+                audio_array = np.frombuffer(data, dtype=np.int16)
+                rms = np.sqrt(np.mean(audio_array.astype(np.float32) ** 2))
+                if rms < 500:  # Silence threshold
+                    silent_chunks += 1
+                    if silent_chunks > max_silent_chunks and final_text:
+                        break  # Stop if we've had enough silence and got some text
+                else:
+                    silent_chunks = 0
+
+            # Get final result (partial result if any)
+            final_result = json.loads(recognizer.FinalResult())
+            if final_result.get("text"):
+                final_text += " " + final_result["text"]
+
+            final_text = final_text.strip()
+
+            if final_text:
+                logger.info(f"Vosk transcription: {final_text}")
+                return final_text
+            else:
+                logger.warning("Vosk returned empty transcription")
+                print("⚠️  No speech detected")
+                return None
+
         except Exception as e:
             logger.error(f"Transcription error: {e}", exc_info=True)
             print(f"❌ Error: {e}")
@@ -341,11 +391,8 @@ class STTService:
                         sys.stdout.flush()
                         print(f"✅ Wake word detected! (model: {model_name}, confidence: {score:.3f})")
 
-                        # Stop wake word detection temporarily
-                        stream.stop_stream()
-
-                        # Transcribe speech
-                        text = self._transcribe_speech()
+                        # Transcribe speech (stream stays running for Vosk)
+                        text = self._transcribe_speech(stream)
 
                         if text:
                             print(f"\n📝 Transcribed text:")
@@ -354,7 +401,6 @@ class STTService:
 
                         # Resume wake word detection
                         print(f"👂 Listening for wake word: '{self.wake_word.upper()}'...")
-                        stream.start_stream()
                         last_update_time = 0  # Reset to show level immediately
 
                 except IOError as e:

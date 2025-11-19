@@ -7,7 +7,7 @@ setuptools>=65.0.0  # Provides distutils for Python 3.12+
 openwakeword==0.5.1
 
 # Speech recognition
-SpeechRecognition==3.10.0
+vosk==0.3.45
 PyAudio==0.2.14
 
 # Audio processing
