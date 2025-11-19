@@ -1,6 +1,7 @@
 # Core dependencies
 python-dotenv==1.0.0
 numpy>=1.26.0
+setuptools>=65.0.0  # Provides distutils for Python 3.12+
 
 # Wake word detection
 openwakeword==0.5.1
