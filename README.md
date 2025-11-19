@@ -143,6 +143,7 @@ cluster/
 ```powershell
 pip install pyaudio
 ```
+
 If that fails:
 ```powershell
 pip install https://github.com/intxcc/pyaudio_portaudio/releases/download/v19.7.6/PyAudio-0.2.14-cp312-cp312-win_amd64.whl
