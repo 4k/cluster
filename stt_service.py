@@ -239,12 +239,19 @@ class STTService:
             print(f"   Audio Device: [{self.device_index}] {device_info['name']}")
             print(f"   Sample Rate: {input_sample_rate} Hz (device native)")
             print(f"   Channels: {input_channels} ({'Stereo' if input_channels == 2 else 'Mono'})")
+            print(f"   Buffer Size: {adjusted_chunk_size} frames")
             print(f"   Detection Threshold: {self.threshold}")
             print(f"   Available models: {', '.join(list(self.wake_word_model.models.keys()))}")
             print(f"")
             print(f"   Say 'Hey {self.wake_word.title()}' to activate speech recognition")
+            print(f"   Watch the audio level bar below to see microphone activity")
             print(f"   (Press Ctrl+C to stop)")
             print(f"{'='*60}\n")
+
+            # For audio level display
+            import sys
+            import time
+            last_update_time = 0
 
             while self.is_running:
                 try:
@@ -268,11 +275,33 @@ class STTService:
                             indices = np.arange(0, len(audio_array), downsample_factor).astype(int)
                             audio_array = audio_array[indices]
 
+                    # Display audio level meter (update every 100ms)
+                    current_time = time.time()
+                    if current_time - last_update_time >= 0.1:
+                        # Calculate RMS level (root mean square)
+                        rms = np.sqrt(np.mean(audio_array ** 2))
+                        # Scale to percentage (typical speech is 0.01-0.3 RMS)
+                        level_percent = min(100, int(rms * 300))
+
+                        # Create visual bar
+                        bar_length = 40
+                        filled = int(bar_length * level_percent / 100)
+                        bar = '█' * filled + '░' * (bar_length - filled)
+
+                        # Print level meter (overwrite same line)
+                        sys.stdout.write(f'\r🎤 Audio Level: [{bar}] {level_percent:3d}%')
+                        sys.stdout.flush()
+
+                        last_update_time = current_time
+
                     # Check for wake word
                     detected, model_name, score = self._detect_wake_word(audio_array)
 
                     if detected:
-                        print(f"\n✅ Wake word detected! (model: {model_name}, confidence: {score:.3f})")
+                        # Clear the audio level line and print wake word detection
+                        sys.stdout.write('\r' + ' ' * 80 + '\r')  # Clear line
+                        sys.stdout.flush()
+                        print(f"✅ Wake word detected! (model: {model_name}, confidence: {score:.3f})")
 
                         # Stop wake word detection temporarily
                         stream.stop_stream()
@@ -286,8 +315,9 @@ class STTService:
                             logger.info(f"Transcribed: {text}")
 
                         # Resume wake word detection
-                        print(f"👂 Listening for wake word: '{self.wake_word}'...\n")
+                        print(f"👂 Listening for wake word: '{self.wake_word.upper()}'...")
                         stream.start_stream()
+                        last_update_time = 0  # Reset to show level immediately
 
                 except IOError as e:
                     # Handle audio buffer overflow
@@ -296,10 +326,16 @@ class STTService:
 
         except KeyboardInterrupt:
             logger.info("Stopping STT service (user interrupt)...")
-            print("\n\n👋 Stopping STT service...")
+            # Clear audio level line
+            sys.stdout.write('\r' + ' ' * 80 + '\r')
+            sys.stdout.flush()
+            print("\n👋 Stopping STT service...")
 
         except Exception as e:
             logger.error(f"STT service error: {e}", exc_info=True)
+            # Clear audio level line
+            sys.stdout.write('\r' + ' ' * 80 + '\r')
+            sys.stdout.flush()
             print(f"\n❌ Error: {e}")
 
         finally:
