@@ -15,7 +15,8 @@ class LLMService:
         self,
         base_url: str = "http://192.168.1.144:11434",
         api_key: Optional[str] = None,
-        api_type: str = "auto"
+        api_type: str = "auto",
+        default_model: str = "qwen2.5-coder:32b"
     ):
         """
         Initialize LLM service
@@ -24,10 +25,12 @@ class LLMService:
             base_url: Base URL of Ollama instance
             api_key: Optional API key for authentication
             api_type: API type - 'auto', 'ollama', 'openai', or 'chat'
+            default_model: Default model name to use for requests
         """
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
         self.api_type = api_type
+        self.default_model = default_model
         self.detected_endpoint = None
 
         # Set up headers
@@ -36,6 +39,7 @@ class LLMService:
             self.headers["Authorization"] = f"Bearer {api_key}"
 
         print(f"LLM Service initialized with Ollama at: {self.base_url}")
+        print(f"Default model: {self.default_model}")
         if api_key:
             print(f"Using authentication: Yes")
 
@@ -58,7 +62,7 @@ class LLMService:
                 url = f"{self.base_url}{path}"
                 # Try a minimal request
                 test_payload = {
-                    "model": "llama3.2",
+                    "model": self.default_model,
                     "prompt": "test" if "generate" in path else None,
                     "messages": [{"role": "user", "content": "test"}] if "chat" in path else None,
                     "stream": False
@@ -89,7 +93,7 @@ class LLMService:
     def send_request(
         self,
         prompt: str,
-        model: str = "llama3.2",
+        model: Optional[str] = None,
         stream: bool = False,
         **kwargs
     ) -> Optional[str]:
@@ -98,13 +102,17 @@ class LLMService:
 
         Args:
             prompt: The text prompt to send
-            model: Model name to use (default: llama3.2)
+            model: Model name to use (default: uses instance default_model)
             stream: Whether to stream the response
             **kwargs: Additional parameters (temperature, max_tokens, etc.)
 
         Returns:
             Generated text response or None if error
         """
+        # Use default model if not specified
+        if model is None:
+            model = self.default_model
+
         # Determine endpoint and payload based on API type
         if self.api_type in ["openai", "openai-compat"]:
             api_url = f"{self.base_url}/v1/chat/completions"
@@ -222,7 +230,7 @@ class LLMService:
     def chat(
         self,
         message: str,
-        model: str = "llama3.2",
+        model: Optional[str] = None,
         system: Optional[str] = None,
         **kwargs
     ) -> Optional[str]:
@@ -231,7 +239,7 @@ class LLMService:
 
         Args:
             message: User message
-            model: Model name
+            model: Model name (default: uses instance default_model)
             system: Optional system prompt
             **kwargs: Additional parameters
 
@@ -309,6 +317,7 @@ class LLMService:
         print("OLLAMA DIAGNOSTICS")
         print("="*60)
         print(f"Base URL: {self.base_url}")
+        print(f"Default Model: {self.default_model}")
         print(f"API Type: {self.api_type}")
         print(f"Auth: {'Yes' if self.api_key else 'No'}")
         print("="*60 + "\n")
@@ -334,7 +343,7 @@ class LLMService:
                     resp = requests.get(url, headers=self.headers, timeout=5)
                 else:
                     test_data = {
-                        "model": "llama3.2",
+                        "model": self.default_model,
                         "prompt": "test" if path == "/api/generate" else None,
                         "messages": [{"role": "user", "content": "test"}] if "chat" in path else None,
                         "stream": False
@@ -361,8 +370,11 @@ class LLMService:
 def main():
     """Example usage of LLM Service"""
 
-    # Initialize service
-    llm = LLMService("http://192.168.1.144:11434")
+    # Initialize service with your model
+    llm = LLMService(
+        base_url="http://192.168.1.144:11434",
+        default_model="qwen2.5-coder:32b"  # Change this to your model
+    )
 
     # Run diagnostics first
     llm.diagnose()
@@ -381,31 +393,28 @@ def main():
     print("LLM Service Ready")
     print("="*60 + "\n")
 
-    # Example 1: Simple request
+    # Example 1: Simple request (uses default model)
     print("Example 1: Simple request")
-    llm.send_request("What is the capital of France?", model="llama3.2")
+    llm.send_request("What is the capital of France?")
 
-    # Example 2: Chat with system prompt
+    # Example 2: Chat with system prompt (uses default model)
     print("\nExample 2: Chat with system prompt")
     llm.chat(
         message="Tell me a joke",
-        system="You are a helpful and funny assistant",
-        model="llama3.2"
+        system="You are a helpful and funny assistant"
     )
 
-    # Example 3: Streaming response
+    # Example 3: Streaming response (uses default model)
     print("\nExample 3: Streaming response")
     llm.send_request(
         "Count from 1 to 5",
-        model="llama3.2",
         stream=True
     )
 
-    # Example 4: With parameters
+    # Example 4: With custom parameters (uses default model)
     print("\nExample 4: With custom parameters")
     llm.send_request(
         "Write a haiku about coding",
-        model="llama3.2",
         temperature=0.7,
         max_tokens=100
     )

@@ -36,14 +36,18 @@ This will:
 ```python
 from llm_service import LLMService
 
-# Initialize service (auto-detects best endpoint)
-llm = LLMService("http://192.168.1.144:11434")
+# Initialize service with your model
+llm = LLMService(
+    base_url="http://192.168.1.144:11434",
+    default_model="qwen2.5-coder:32b"  # YOUR MODEL HERE - only define ONCE!
+)
 
-# Or specify API type explicitly
+# Or specify all parameters
 llm = LLMService(
     base_url="http://192.168.1.144:11434",
     api_type="auto",  # auto|ollama-generate|ollama-chat|openai
-    api_key=None  # optional auth token
+    api_key=None,  # optional auth token
+    default_model="qwen2.5-coder:32b"  # YOUR MODEL HERE
 )
 
 # Run diagnostics
@@ -51,47 +55,52 @@ llm.diagnose()
 
 # Check connection
 if llm.check_connection():
-    # Send a simple request
-    response = llm.send_request("What is Python?", model="llama3.2")
+    # Send a simple request (uses default model)
+    response = llm.send_request("What is Python?")
     print(response)
 
-    # Use chat interface
+    # Use chat interface (uses default model)
     response = llm.chat(
         message="Explain quantum computing",
-        system="You are a physics teacher",
-        model="llama3.2"
+        system="You are a physics teacher"
     )
 
-    # Stream response
+    # Stream response (uses default model)
     response = llm.send_request(
         "Tell me a story",
-        model="llama3.2",
         stream=True
+    )
+
+    # Override model for specific request
+    response = llm.send_request(
+        "Quick question",
+        model="llama3.2"  # Use different model just for this request
     )
 ```
 
 ## API
 
-### LLMService(base_url, api_key=None, api_type="auto")
+### LLMService(base_url, api_key=None, api_type="auto", default_model="qwen2.5-coder:32b")
 Initialize the service with Ollama URL
 - `base_url`: Ollama instance URL
 - `api_key`: Optional authentication token
 - `api_type`: API endpoint type (auto-detects by default)
+- `default_model`: Default model name - **DEFINE ONCE HERE!**
 
 ### diagnose()
 Run comprehensive endpoint diagnostics to identify connectivity issues
 
-### send_request(prompt, model, stream, **kwargs)
+### send_request(prompt, model=None, stream=False, **kwargs)
 Send a request to Ollama
 - `prompt`: Text prompt
-- `model`: Model name (default: "llama3.2")
+- `model`: Model name (default: None = uses instance default_model)
 - `stream`: Stream response (default: False)
 - `**kwargs`: Additional Ollama parameters (temperature, max_tokens, etc.)
 
-### chat(message, model, system, **kwargs)
+### chat(message, model=None, system=None, **kwargs)
 Send a chat message
 - `message`: User message
-- `model`: Model name
+- `model`: Model name (default: None = uses instance default_model)
 - `system`: Optional system prompt
 - `**kwargs`: Additional parameters
 
@@ -166,5 +175,7 @@ llm = LLMService(
 - This service is standalone and NOT connected to other services (STT, TTS, etc.)
 - Responses are printed to console
 - Default timeout is 120 seconds
-- Default model is "llama3.2"
+- **Default model is "qwen2.5-coder:32b"** - Change this in `__init__()` to use your model!
+- Model name only needs to be defined ONCE in the constructor
 - Automatically detects the best API endpoint
+- You can override the model per-request if needed
