@@ -38,7 +38,7 @@ def list_audio_devices():
 class STTService:
     """Speech-to-Text service with wake word detection."""
 
-    def __init__(self, wake_word="computer", chunk_size=1280, sample_rate=16000, threshold=0.5, device_index=None):
+    def __init__(self, wake_word="computer", chunk_size=1280, sample_rate=16000, threshold=0.5, device_index=None, verbose=False):
         """
         Initialize the STT service.
 
@@ -48,12 +48,14 @@ class STTService:
             sample_rate: Audio sample rate in Hz (default: 16000)
             threshold: Detection threshold 0.0-1.0 (default: 0.5)
             device_index: Audio input device index (default: None = system default)
+            verbose: Show detection scores in real-time (default: False)
         """
         self.wake_word = wake_word.lower()
         self.chunk_size = chunk_size
         self.sample_rate = sample_rate
         self.threshold = threshold
         self.device_index = device_index
+        self.verbose = verbose
         self.is_running = False
 
         # Initialize wake word model
@@ -78,22 +80,35 @@ class STTService:
 
         logger.info(f"STT Service initialized with wake word: '{self.wake_word}'")
 
-    def _detect_wake_word(self, audio_data):
+    def _detect_wake_word(self, audio_data, show_scores=False):
         """
         Detect wake word in audio data.
 
         Args:
             audio_data: Audio data as numpy array (float32, range -1.0 to 1.0)
+            show_scores: If True, display all model scores (for debugging)
 
         Returns:
-            tuple: (detected, model_name, score) - detected is True if wake word found
+            tuple: (detected, model_name, score, all_scores) - detected is True if wake word found
         """
         try:
             # Get prediction from model
             prediction = self.wake_word_model.predict(audio_data)
 
+            # For debugging: show all scores
+            if show_scores:
+                return False, None, 0.0, prediction
+
             # Check all models for wake word detection
+            max_score = 0.0
+            max_model = None
+
             for model_name, score in prediction.items():
+                # Track highest score for any model
+                if score > max_score:
+                    max_score = score
+                    max_model = model_name
+
                 # Check if this model matches our wake word and score is above threshold
                 # Match partial names: "alexa" matches "alexa", "jarvis" matches "hey_jarvis", etc.
                 model_simple = model_name.lower().replace("hey_", "").replace("_", " ")
@@ -102,13 +117,17 @@ class STTService:
                 if wake_word_simple in model_simple or model_simple in wake_word_simple:
                     if score > self.threshold:
                         logger.info(f"Wake word '{self.wake_word}' detected in model '{model_name}' (confidence: {score:.3f})")
-                        return True, model_name, score
+                        return True, model_name, score, prediction
 
-            return False, None, 0.0
+            # Log if we got close but didn't trigger
+            if max_score > self.threshold * 0.7:
+                logger.debug(f"Close detection: {max_model} = {max_score:.3f} (threshold: {self.threshold})")
+
+            return False, None, 0.0, prediction
 
         except Exception as e:
             logger.error(f"Error in wake word detection: {e}", exc_info=True)
-            return False, None, 0.0
+            return False, None, 0.0, {}
 
     def _transcribe_speech(self):
         """
@@ -275,6 +294,9 @@ class STTService:
                             indices = np.arange(0, len(audio_array), downsample_factor).astype(int)
                             audio_array = audio_array[indices]
 
+                    # Check for wake word
+                    detected, model_name, score, all_scores = self._detect_wake_word(audio_array)
+
                     # Display audio level meter (update every 100ms)
                     current_time = time.time()
                     if current_time - last_update_time >= 0.1:
@@ -283,19 +305,21 @@ class STTService:
                         # Scale to percentage (typical speech is 0.01-0.3 RMS)
                         level_percent = min(100, int(rms * 300))
 
-                        # Create visual bar
-                        bar_length = 40
-                        filled = int(bar_length * level_percent / 100)
-                        bar = '█' * filled + '░' * (bar_length - filled)
+                        if self.verbose and all_scores:
+                            # Show detection scores for debugging
+                            scores_str = " | ".join([f"{k.replace('hey_', '')}:{v:.2f}" for k, v in sorted(all_scores.items(), key=lambda x: x[1], reverse=True)[:3]])
+                            sys.stdout.write(f'\r🎤 Audio: {level_percent:3d}% | Scores: {scores_str:<50} | Threshold: {self.threshold:.2f}')
+                        else:
+                            # Create visual bar
+                            bar_length = 40
+                            filled = int(bar_length * level_percent / 100)
+                            bar = '█' * filled + '░' * (bar_length - filled)
 
-                        # Print level meter (overwrite same line)
-                        sys.stdout.write(f'\r🎤 Audio Level: [{bar}] {level_percent:3d}%')
+                            # Print level meter (overwrite same line)
+                            sys.stdout.write(f'\r🎤 Audio Level: [{bar}] {level_percent:3d}%')
+
                         sys.stdout.flush()
-
                         last_update_time = current_time
-
-                    # Check for wake word
-                    detected, model_name, score = self._detect_wake_word(audio_array)
 
                     if detected:
                         # Clear the audio level line and print wake word detection
@@ -390,6 +414,11 @@ def main():
         default='jarvis',
         help='Wake word to detect: alexa, jarvis, mycroft, rhasspy (default: jarvis)'
     )
+    parser.add_argument(
+        '--verbose',
+        action='store_true',
+        help='Show detection scores in real-time for debugging'
+    )
 
     args = parser.parse_args()
 
@@ -403,7 +432,8 @@ def main():
         stt_service = STTService(
             wake_word=args.wake_word,
             threshold=args.threshold,
-            device_index=args.device
+            device_index=args.device,
+            verbose=args.verbose
         )
         stt_service.start()
     except Exception as e:
