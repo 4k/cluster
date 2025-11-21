@@ -238,6 +238,12 @@ class ConfigManager:
             "DISPLAY_LED_PIN": "display.led_pin",
             "DISPLAY_TOUCH_ENABLED": "display.touch_enabled",
             "DISPLAY_CALIBRATION_FILE": "display.calibration_file",
+            # Window-specific settings
+            "DISPLAY_EYES_POSITION": "display.eyes_position",
+            "DISPLAY_EYES_SIZE": "display.eyes_size",
+            "DISPLAY_MOUTH_POSITION": "display.mouth_position",
+            "DISPLAY_MOUTH_SIZE": "display.mouth_size",
+            "DISPLAY_WINDOWS_CONFIG": "display.windows_config",
             "CAMERA_ENABLED": "camera.enabled",
             "CAMERA_DEVICE_ID": "camera.device_id",
             "CAMERA_RESOLUTION": "camera.resolution",
