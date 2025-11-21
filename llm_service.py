@@ -1,26 +1,36 @@
 """
 Standalone LLM Service
 Connects to Ollama instance and processes requests
+Event-driven version that integrates with the event bus.
 """
 
 import requests
 import json
+import asyncio
+import logging
+import time
 from typing import Optional, Dict, Any
+
+# Event bus imports
+from src.core.event_bus import EventBus, EventType, emit_event
 
 # Default configuration constants
 DEFAULT_BASE_URL = "http://192.168.1.144:11434"
 DEFAULT_MODEL = "qwen3-coder:30b"
 
+logger = logging.getLogger(__name__)
+
 
 class LLMService:
-    """Simple LLM service that connects to Ollama"""
+    """Simple LLM service that connects to Ollama. Event-driven with async support."""
 
     def __init__(
         self,
         base_url: str = DEFAULT_BASE_URL,
         api_key: Optional[str] = None,
         api_type: str = "auto",
-        default_model: str = DEFAULT_MODEL
+        default_model: str = DEFAULT_MODEL,
+        system_prompt: Optional[str] = None
     ):
         """
         Initialize LLM service
@@ -30,12 +40,15 @@ class LLMService:
             api_key: Optional API key for authentication
             api_type: API type - 'auto', 'ollama', 'openai', or 'chat'
             default_model: Default model name to use for requests
+            system_prompt: Optional system prompt to use for all requests
         """
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
         self.api_type = api_type
         self.default_model = default_model
+        self.system_prompt = system_prompt or "You are a helpful voice assistant. Provide concise, natural responses suitable for voice output."
         self.detected_endpoint = None
+        self.event_bus = None
 
         # Set up headers
         self.headers = {"Content-Type": "application/json"}
@@ -50,6 +63,138 @@ class LLMService:
         # Auto-detect best endpoint if requested
         if api_type == "auto":
             self._detect_endpoint()
+
+    async def initialize(self):
+        """Initialize event bus connection and subscribe to events."""
+        logger.info("Initializing LLM service with event bus...")
+        self.event_bus = await EventBus.get_instance()
+
+        # Subscribe to speech detected events
+        self.event_bus.subscribe(EventType.SPEECH_DETECTED, self._on_speech_detected)
+        self.event_bus.subscribe(EventType.AMBIENT_SPEECH_DETECTED, self._on_ambient_speech_detected)
+        self.event_bus.subscribe(EventType.SYSTEM_STOPPED, self._on_system_stopped)
+
+        logger.info("LLM service initialized with event bus")
+
+    async def _on_system_stopped(self, event):
+        """Handle system stopped event."""
+        logger.info("Received SYSTEM_STOPPED event")
+
+    async def _on_speech_detected(self, event):
+        """Handle speech detected event."""
+        text = event.data.get("text", "")
+        correlation_id = event.correlation_id
+
+        logger.info(f"Processing speech: {text} (correlation_id: {correlation_id})")
+
+        # Generate response asynchronously
+        response = await self.generate_async(text, correlation_id=correlation_id)
+
+        if response:
+            logger.info(f"Generated response: {response[:100]}...")
+        else:
+            logger.error("Failed to generate response")
+
+    async def _on_ambient_speech_detected(self, event):
+        """Handle ambient speech detected event."""
+        text = event.data.get("text", "")
+        correlation_id = event.correlation_id
+
+        logger.info(f"Processing ambient speech: {text} (correlation_id: {correlation_id})")
+
+        # Could handle differently than wake word speech
+        response = await self.generate_async(text, correlation_id=correlation_id)
+
+        if response:
+            logger.info(f"Generated ambient response: {response[:100]}...")
+
+    async def generate_async(self, prompt: str, model: Optional[str] = None, correlation_id: Optional[str] = None, **kwargs) -> Optional[str]:
+        """
+        Generate response asynchronously with event bus integration.
+
+        Args:
+            prompt: The text prompt
+            model: Model name to use (default: uses instance default_model)
+            correlation_id: Correlation ID for request tracing
+            **kwargs: Additional parameters
+
+        Returns:
+            Generated text response or None if error
+        """
+        start_time = time.time()
+
+        # Emit response generating event
+        if self.event_bus:
+            await emit_event(
+                EventType.RESPONSE_GENERATING,
+                {
+                    "prompt": prompt,
+                    "model": model or self.default_model,
+                    "timestamp": start_time
+                },
+                correlation_id=correlation_id,
+                source="llm"
+            )
+
+        try:
+            # Run blocking request in executor to avoid blocking event loop
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: self.send_request(prompt, model=model, **kwargs)
+            )
+
+            if response:
+                elapsed_time = time.time() - start_time
+
+                # Emit response generated event
+                if self.event_bus:
+                    await emit_event(
+                        EventType.RESPONSE_GENERATED,
+                        {
+                            "response": response,
+                            "prompt": prompt,
+                            "model": model or self.default_model,
+                            "elapsed_time": elapsed_time,
+                            "timestamp": time.time(),
+                            "word_count": len(response.split())
+                        },
+                        correlation_id=correlation_id,
+                        source="llm"
+                    )
+
+                return response
+            else:
+                # Emit error event
+                if self.event_bus:
+                    await emit_event(
+                        EventType.ERROR_OCCURRED,
+                        {
+                            "error": "No response from LLM",
+                            "service": "llm",
+                            "operation": "generation"
+                        },
+                        correlation_id=correlation_id,
+                        source="llm"
+                    )
+                return None
+
+        except Exception as e:
+            logger.error(f"Error generating response: {e}", exc_info=True)
+
+            # Emit error event
+            if self.event_bus:
+                await emit_event(
+                    EventType.ERROR_OCCURRED,
+                    {
+                        "error": str(e),
+                        "service": "llm",
+                        "operation": "generation"
+                    },
+                    correlation_id=correlation_id,
+                    source="llm"
+                )
+            return None
 
     def _detect_endpoint(self):
         """Auto-detect which API endpoint works"""
@@ -371,8 +516,14 @@ class LLMService:
         print("\n" + "="*60 + "\n")
 
 
-def main():
-    """Example usage of LLM Service"""
+async def main_async():
+    """Async main for LLM service with event bus."""
+    # Initialize event bus
+    bus = await EventBus.get_instance()
+    await bus.start()
+
+    # Emit system started event
+    await emit_event(EventType.SYSTEM_STARTED, {"service": "llm"}, source="llm")
 
     # Initialize service with your model
     llm = LLMService(
@@ -394,34 +545,37 @@ def main():
         return
 
     print("\n" + "="*60)
-    print("LLM Service Ready")
+    print("LLM Service Ready (Event-Driven)")
     print("="*60 + "\n")
 
-    # Example 1: Simple request (uses default model)
-    print("Example 1: Simple request")
-    llm.send_request("What is the capital of France?")
+    # Initialize event bus integration
+    await llm.initialize()
 
-    # Example 2: Chat with system prompt (uses default model)
-    print("\nExample 2: Chat with system prompt")
-    llm.chat(
-        message="Tell me a joke",
-        system="You are a helpful and funny assistant"
+    print("LLM service is now listening for SPEECH_DETECTED events...")
+    print("Press Ctrl+C to stop")
+
+    try:
+        # Keep service running
+        while True:
+            await asyncio.sleep(1)
+    except KeyboardInterrupt:
+        print("\nStopping LLM service...")
+    finally:
+        # Emit system stopped event and stop bus
+        await emit_event(EventType.SYSTEM_STOPPED, {"service": "llm"}, source="llm")
+        await bus.stop()
+
+
+def main():
+    """Example usage of LLM Service"""
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
 
-    # Example 3: Streaming response (uses default model)
-    print("\nExample 3: Streaming response")
-    llm.send_request(
-        "Count from 1 to 5",
-        stream=True
-    )
-
-    # Example 4: With custom parameters (uses default model)
-    print("\nExample 4: With custom parameters")
-    llm.send_request(
-        "Write a haiku about coding",
-        temperature=0.7,
-        max_tokens=100
-    )
+    # Run async main
+    asyncio.run(main_async())
 
 
 if __name__ == "__main__":

@@ -2,14 +2,21 @@
 """
 Speech-to-Text Service with Wake Word Detection.
 Uses openwakeword to detect wake word, then transcribes speech using Vosk.
+Event-driven version that integrates with the event bus.
 """
 import sys
 import logging
 import json
+import asyncio
+import uuid
+import time
 import numpy as np
 import pyaudio
 from vosk import Model as VoskModel, KaldiRecognizer
 from openwakeword.model import Model
+
+# Event bus imports
+from src.core.event_bus import EventBus, EventType, emit_event
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +44,7 @@ def list_audio_devices():
 
 
 class STTService:
-    """Speech-to-Text service with wake word detection."""
+    """Speech-to-Text service with wake word detection. Event-driven with async support."""
 
     def __init__(self, wake_word="computer", chunk_size=1280, sample_rate=16000, threshold=0.5, device_index=None, verbose=False, vosk_model_path=None):
         """
@@ -60,6 +67,7 @@ class STTService:
         self.verbose = verbose
         self.vosk_model_path = vosk_model_path
         self.is_running = False
+        self.event_bus = None
 
         # Initialize wake word model
         logger.info("Initializing wake word detection model...")
@@ -122,6 +130,16 @@ class STTService:
 
         logger.info(f"STT Service initialized with wake word: '{self.wake_word}'")
 
+    async def initialize(self):
+        """Initialize event bus connection and subscribe to events."""
+        logger.info("Initializing STT service with event bus...")
+        self.event_bus = await EventBus.get_instance()
+
+        # Subscribe to relevant events (e.g., system control events)
+        self.event_bus.subscribe(EventType.SYSTEM_STOPPED, self._on_system_stopped)
+
+        logger.info("STT service initialized with event bus")
+
     def _detect_wake_word(self, audio_data, show_scores=False):
         """
         Detect wake word in audio data.
@@ -171,12 +189,18 @@ class STTService:
             logger.error(f"Error in wake word detection: {e}", exc_info=True)
             return False, None, 0.0, {}
 
-    def _transcribe_speech(self, audio_stream):
+    async def _on_system_stopped(self, event):
+        """Handle system stopped event."""
+        logger.info("Received SYSTEM_STOPPED event, stopping STT service...")
+        self.stop()
+
+    async def _transcribe_speech(self, audio_stream, correlation_id=None):
         """
         Transcribe speech after wake word is detected using Vosk.
 
         Args:
             audio_stream: PyAudio stream object to record from
+            correlation_id: Correlation ID for request tracing
 
         Returns:
             str: Transcribed text or None if recognition failed
@@ -214,6 +238,14 @@ class STTService:
                 if rms < 500:  # Silence threshold
                     silent_chunks += 1
                     if silent_chunks > max_silent_chunks and final_text:
+                        # Emit silence detected event
+                        if self.event_bus:
+                            await emit_event(
+                                EventType.SILENCE_DETECTED,
+                                {"duration": silent_chunks * chunk_size / actual_rate},
+                                correlation_id=correlation_id,
+                                source="stt"
+                            )
                         break  # Stop if we've had enough silence and got some text
                 else:
                     silent_chunks = 0
@@ -227,6 +259,29 @@ class STTService:
 
             if final_text:
                 logger.info(f"Vosk transcription: {final_text}")
+
+                # Emit speech detected event
+                if self.event_bus:
+                    await emit_event(
+                        EventType.SPEECH_DETECTED,
+                        {
+                            "text": final_text,
+                            "confidence": 0.95,  # Vosk doesn't provide confidence per utterance
+                            "timestamp": time.time(),
+                            "language": "en"
+                        },
+                        correlation_id=correlation_id,
+                        source="stt"
+                    )
+
+                    # Emit speech ended event
+                    await emit_event(
+                        EventType.SPEECH_ENDED,
+                        {"text": final_text},
+                        correlation_id=correlation_id,
+                        source="stt"
+                    )
+
                 return final_text
             else:
                 logger.warning("Vosk returned empty transcription")
@@ -236,6 +291,19 @@ class STTService:
         except Exception as e:
             logger.error(f"Transcription error: {e}", exc_info=True)
             print(f"❌ Error: {e}")
+
+            # Emit error event
+            if self.event_bus:
+                await emit_event(
+                    EventType.ERROR_OCCURRED,
+                    {
+                        "error": str(e),
+                        "service": "stt",
+                        "operation": "transcription"
+                    },
+                    correlation_id=correlation_id,
+                    source="stt"
+                )
             return None
 
     def start(self):
@@ -402,13 +470,47 @@ class STTService:
                         sys.stdout.flush()
                         print(f"✅ Wake word detected! (model: {model_name}, confidence: {score:.3f})")
 
+                        # Generate correlation ID for this request
+                        correlation_id = f"stt-{uuid.uuid4().hex[:12]}"
+
+                        # Emit wake word detected event
+                        if self.event_bus:
+                            asyncio.create_task(emit_event(
+                                EventType.WAKE_WORD_DETECTED,
+                                {
+                                    "wake_word": self.wake_word,
+                                    "model": model_name,
+                                    "confidence": float(score),
+                                    "timestamp": time.time()
+                                },
+                                correlation_id=correlation_id,
+                                source="stt"
+                            ))
+
+                            # Emit audio started event
+                            asyncio.create_task(emit_event(
+                                EventType.AUDIO_STARTED,
+                                {"device_index": self.device_index},
+                                correlation_id=correlation_id,
+                                source="stt"
+                            ))
+
                         # Transcribe speech (stream stays running for Vosk)
-                        text = self._transcribe_speech(stream)
+                        text = asyncio.run(self._transcribe_speech(stream, correlation_id=correlation_id))
 
                         if text:
                             print(f"\n📝 Transcribed text:")
                             print(f"   \"{text}\"\n")
                             logger.info(f"Transcribed: {text}")
+
+                        # Emit audio stopped event
+                        if self.event_bus:
+                            asyncio.create_task(emit_event(
+                                EventType.AUDIO_STOPPED,
+                                {},
+                                correlation_id=correlation_id,
+                                source="stt"
+                            ))
 
                         # Resume wake word detection
                         print(f"👂 Listening for wake word: '{self.wake_word.upper()}'...")
@@ -450,18 +552,12 @@ class STTService:
         self.is_running = False
 
 
-def main():
-    """Main entry point for testing the STT service."""
+async def main_async():
+    """Async entry point for STT service with event bus."""
     import argparse
 
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-
     # Parse command-line arguments
-    parser = argparse.ArgumentParser(description='Speech-to-Text Service with Wake Word Detection')
+    parser = argparse.ArgumentParser(description='Speech-to-Text Service with Wake Word Detection (Event-Driven)')
     parser.add_argument(
         '--list-devices',
         action='store_true',
@@ -500,16 +596,40 @@ def main():
 
     # Create and start STT service
     try:
+        # Initialize event bus
+        bus = await EventBus.get_instance()
+        await bus.start()
+
+        # Emit system started event
+        await emit_event(EventType.SYSTEM_STARTED, {"service": "stt"}, source="stt")
+
         stt_service = STTService(
             wake_word=args.wake_word,
             threshold=args.threshold,
             device_index=args.device,
             verbose=args.verbose
         )
+        await stt_service.initialize()
         stt_service.start()
     except Exception as e:
         logger.error(f"Failed to start STT service: {e}", exc_info=True)
         sys.exit(1)
+    finally:
+        # Emit system stopped event and stop bus
+        await emit_event(EventType.SYSTEM_STOPPED, {"service": "stt"}, source="stt")
+        await bus.stop()
+
+
+def main():
+    """Main entry point for testing the STT service."""
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+
+    # Run async main
+    asyncio.run(main_async())
 
 
 if __name__ == "__main__":
