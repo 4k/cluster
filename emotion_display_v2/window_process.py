@@ -58,12 +58,29 @@ def run_window_process(command_queue: mp.Queue, config: Dict[str, Any]) -> None:
     subscriptions = config.get('subscriptions', [])
     background_color = tuple(config.get('background_color', (20, 20, 25)))
 
-    # Create appropriate renderer(s)
-    renderers = []
+    # Check if this is a combined window (both eyes and mouth)
+    has_eyes = ContentType.EYES.value in subscriptions or 'eyes' in subscriptions
+    has_mouth = ContentType.MOUTH.value in subscriptions or 'mouth' in subscriptions
+    is_combined = has_eyes and has_mouth
 
-    if ContentType.EYES.value in subscriptions or 'eyes' in subscriptions:
+    # Create appropriate renderer(s) with sub-surfaces for combined mode
+    renderers = []
+    surfaces = {}  # Store surfaces and their blit positions
+
+    if is_combined:
+        # Combined mode: split the window vertically
+        # Eyes take ~55% of height, mouth takes ~40%, with spacing
+        eye_height = int(height * 0.55)
+        mouth_height = int(height * 0.40)
+        spacing = int(height * 0.02)
+
+        # Create sub-surfaces
+        eye_surface = pygame.Surface((width, eye_height))
+        mouth_surface = pygame.Surface((width, mouth_height))
+
+        # Eye renderer
         eye_renderer = EyeRenderer(
-            width, height, background_color,
+            width, eye_height, background_color,
             iris_color=tuple(config.get('iris_color', (100, 150, 200))),
             pupil_color=tuple(config.get('pupil_color', (20, 20, 30))),
             sclera_color=tuple(config.get('sclera_color', (240, 240, 245))),
@@ -73,20 +90,51 @@ def run_window_process(command_queue: mp.Queue, config: Dict[str, Any]) -> None:
             gaze_smoothing=config.get('gaze_smoothing', 0.1),
             max_gaze_offset=config.get('max_gaze_offset', 0.3)
         )
-        eye_renderer.set_surface(screen)
+        eye_renderer.set_surface(eye_surface)
         renderers.append(('eyes', eye_renderer))
+        surfaces['eyes'] = (eye_surface, (0, 0))
 
-    if ContentType.MOUTH.value in subscriptions or 'mouth' in subscriptions:
+        # Mouth renderer
         mouth_renderer = MouthRenderer(
-            width, height, background_color,
+            width, mouth_height, background_color,
             lip_color=tuple(config.get('lip_color', (180, 100, 100))),
             interior_color=tuple(config.get('interior_color', (60, 30, 40))),
             teeth_color=tuple(config.get('teeth_color', (240, 240, 235))),
             transition_speed=config.get('transition_speed', 12.0),
             idle_movement=config.get('idle_movement', True)
         )
-        mouth_renderer.set_surface(screen)
+        mouth_renderer.set_surface(mouth_surface)
         renderers.append(('mouth', mouth_renderer))
+        surfaces['mouth'] = (mouth_surface, (0, eye_height + spacing))
+
+    else:
+        # Single renderer mode: use full screen
+        if has_eyes:
+            eye_renderer = EyeRenderer(
+                width, height, background_color,
+                iris_color=tuple(config.get('iris_color', (100, 150, 200))),
+                pupil_color=tuple(config.get('pupil_color', (20, 20, 30))),
+                sclera_color=tuple(config.get('sclera_color', (240, 240, 245))),
+                blink_duration=config.get('blink_duration', 0.15),
+                blink_interval_min=config.get('blink_interval_min', 2.0),
+                blink_interval_max=config.get('blink_interval_max', 6.0),
+                gaze_smoothing=config.get('gaze_smoothing', 0.1),
+                max_gaze_offset=config.get('max_gaze_offset', 0.3)
+            )
+            eye_renderer.set_surface(screen)
+            renderers.append(('eyes', eye_renderer))
+
+        if has_mouth:
+            mouth_renderer = MouthRenderer(
+                width, height, background_color,
+                lip_color=tuple(config.get('lip_color', (180, 100, 100))),
+                interior_color=tuple(config.get('interior_color', (60, 30, 40))),
+                teeth_color=tuple(config.get('teeth_color', (240, 240, 235))),
+                transition_speed=config.get('transition_speed', 12.0),
+                idle_movement=config.get('idle_movement', True)
+            )
+            mouth_renderer.set_surface(screen)
+            renderers.append(('mouth', mouth_renderer))
 
     if not renderers:
         logger.warning(f"No renderers created for subscriptions: {subscriptions}")
@@ -156,10 +204,20 @@ def run_window_process(command_queue: mp.Queue, config: Dict[str, Any]) -> None:
         for name, renderer in renderers:
             renderer.update(dt)
 
-        # Clear and render
+        # Clear main screen
         screen.fill(background_color)
-        for name, renderer in renderers:
-            renderer.render()
+
+        # Render
+        if is_combined:
+            # Render each to its sub-surface and blit to main screen
+            for name, renderer in renderers:
+                renderer.render()
+            for name, (surface, pos) in surfaces.items():
+                screen.blit(surface, pos)
+        else:
+            # Single renderer mode: render directly to screen
+            for name, renderer in renderers:
+                renderer.render()
 
         pygame.display.flip()
         clock.tick(fps)
