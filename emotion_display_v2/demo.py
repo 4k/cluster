@@ -71,7 +71,7 @@ async def run_demo(mode: str = 'dual', connect_event_bus: bool = False):
         print("  S     - Start speaking animation")
         print("  X     - Stop speaking animation")
         print("  T     - Test text animation ('Hello, how are you today?')")
-        print("  H     - Happy emotion")
+        print("  A     - Angry emotion")
         print("  N     - Neutral emotion")
         print("  ESC   - Close window")
         print("\n" + "=" * 50)

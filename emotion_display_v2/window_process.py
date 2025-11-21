@@ -177,10 +177,10 @@ def run_window_process(command_queue: mp.Queue, config: Dict[str, Any]) -> None:
                     for name, renderer in renderers:
                         if hasattr(renderer, 'speak_text'):
                             renderer.speak_text("Hello, how are you today?")
-                elif event.key == pygame.K_h:
+                elif event.key == pygame.K_a:
                     from .renderers.base_renderer import EmotionState
                     for name, renderer in renderers:
-                        renderer.set_emotion(EmotionState.HAPPY)
+                        renderer.set_emotion(EmotionState.ANGRY)
                 elif event.key == pygame.K_n:
                     from .renderers.base_renderer import EmotionState
                     for name, renderer in renderers:
