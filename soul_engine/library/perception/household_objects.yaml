@@ -1,0 +1,236 @@
+# Household Objects Perception
+# ============================
+# Defines how the assistant perceives and categorizes common
+# household objects for context-aware interactions.
+
+meta:
+  id: "household_objects"
+  version: "1.0.0"
+  type: "perception"
+  category: "environment"
+  description: "Recognition and semantic understanding of household items"
+
+# Object Categories
+# -----------------
+categories:
+  furniture:
+    description: "Large items for sitting, sleeping, or storage"
+    interaction_type: "stationary"
+    objects:
+      - id: "chair"
+        names: ["chair", "seat", "stool"]
+        affordances: ["sit", "move", "stand_on"]
+        typical_locations: ["living_room", "kitchen", "office", "bedroom"]
+
+      - id: "table"
+        names: ["table", "desk", "counter"]
+        affordances: ["place_items", "work_surface", "eat_at"]
+        typical_locations: ["living_room", "kitchen", "office", "dining_room"]
+
+      - id: "bed"
+        names: ["bed", "mattress", "futon"]
+        affordances: ["sleep", "rest", "sit"]
+        typical_locations: ["bedroom"]
+
+      - id: "couch"
+        names: ["couch", "sofa", "loveseat"]
+        affordances: ["sit", "lie_down", "relax"]
+        typical_locations: ["living_room"]
+
+      - id: "shelf"
+        names: ["shelf", "bookshelf", "cabinet", "cupboard"]
+        affordances: ["store", "display", "organize"]
+        typical_locations: ["any"]
+
+  electronics:
+    description: "Powered devices and appliances"
+    interaction_type: "interactive"
+    objects:
+      - id: "television"
+        names: ["TV", "television", "screen", "monitor"]
+        affordances: ["watch", "display", "connect"]
+        typical_locations: ["living_room", "bedroom"]
+        states: ["on", "off", "standby"]
+
+      - id: "computer"
+        names: ["computer", "PC", "laptop", "desktop"]
+        affordances: ["use", "work", "browse", "play"]
+        typical_locations: ["office", "bedroom", "living_room"]
+        states: ["on", "off", "sleep"]
+
+      - id: "phone"
+        names: ["phone", "smartphone", "mobile", "cellphone"]
+        affordances: ["call", "message", "browse", "photograph"]
+        typical_locations: ["any", "pocket", "desk"]
+        states: ["on", "off", "charging", "ringing"]
+
+      - id: "lamp"
+        names: ["lamp", "light", "lighting"]
+        affordances: ["illuminate", "toggle"]
+        typical_locations: ["any"]
+        states: ["on", "off", "dimmed"]
+
+      - id: "speaker"
+        names: ["speaker", "sound system", "audio"]
+        affordances: ["play_audio", "adjust_volume"]
+        typical_locations: ["living_room", "bedroom", "kitchen"]
+        states: ["playing", "paused", "off"]
+
+  kitchen_items:
+    description: "Items for food preparation and consumption"
+    interaction_type: "manipulable"
+    objects:
+      - id: "cup"
+        names: ["cup", "mug", "glass"]
+        affordances: ["drink_from", "fill", "hold"]
+        typical_locations: ["kitchen", "any"]
+        states: ["empty", "full", "dirty"]
+
+      - id: "plate"
+        names: ["plate", "dish", "bowl"]
+        affordances: ["eat_from", "serve", "hold_food"]
+        typical_locations: ["kitchen", "dining_room"]
+        states: ["empty", "has_food", "dirty"]
+
+      - id: "utensil"
+        names: ["fork", "spoon", "knife", "chopsticks"]
+        affordances: ["eat_with", "cut", "scoop", "pick_up"]
+        typical_locations: ["kitchen", "dining_room"]
+
+      - id: "appliance_small"
+        names: ["kettle", "toaster", "microwave", "blender"]
+        affordances: ["heat", "cook", "prepare"]
+        typical_locations: ["kitchen"]
+        states: ["on", "off", "in_use"]
+
+  comfort_items:
+    description: "Items for comfort and personal use"
+    interaction_type: "personal"
+    objects:
+      - id: "blanket"
+        names: ["blanket", "throw", "comforter", "quilt"]
+        affordances: ["warm", "cover", "wrap"]
+        typical_locations: ["bedroom", "living_room"]
+        states: ["in_use", "stored", "messy"]
+
+      - id: "pillow"
+        names: ["pillow", "cushion"]
+        affordances: ["rest_head", "support", "hug"]
+        typical_locations: ["bedroom", "living_room"]
+
+      - id: "plush"
+        names: ["plushie", "stuffed animal", "teddy bear"]
+        affordances: ["hug", "display", "comfort"]
+        typical_locations: ["bedroom", "living_room"]
+        emotional_significance: "high"
+
+  books_media:
+    description: "Reading and media items"
+    interaction_type: "consumable"
+    objects:
+      - id: "book"
+        names: ["book", "novel", "textbook", "manga"]
+        affordances: ["read", "reference", "display"]
+        typical_locations: ["office", "bedroom", "living_room"]
+        states: ["reading", "finished", "unread"]
+
+      - id: "magazine"
+        names: ["magazine", "journal", "periodical"]
+        affordances: ["read", "browse", "recycle"]
+        typical_locations: ["living_room", "bathroom"]
+
+      - id: "game"
+        names: ["game", "board game", "video game", "cards"]
+        affordances: ["play", "enjoy", "share"]
+        typical_locations: ["living_room", "bedroom"]
+
+# Room Definitions
+# ----------------
+rooms:
+  living_room:
+    primary_function: "relaxation_social"
+    typical_objects: ["couch", "television", "table", "lamp", "shelf"]
+    activities: ["watching", "relaxing", "socializing", "reading"]
+
+  bedroom:
+    primary_function: "rest_personal"
+    typical_objects: ["bed", "pillow", "blanket", "lamp", "shelf"]
+    activities: ["sleeping", "resting", "dressing", "relaxing"]
+    privacy_level: "high"
+
+  kitchen:
+    primary_function: "food_preparation"
+    typical_objects: ["table", "chair", "cup", "plate", "appliance_small"]
+    activities: ["cooking", "eating", "cleaning", "preparing"]
+
+  office:
+    primary_function: "work_study"
+    typical_objects: ["desk", "chair", "computer", "lamp", "book"]
+    activities: ["working", "studying", "reading", "computing"]
+
+  bathroom:
+    primary_function: "hygiene"
+    typical_objects: []
+    activities: ["washing", "grooming"]
+    privacy_level: "maximum"
+
+# Context Rules
+# -------------
+context_rules:
+  # Time-based context
+  time_awareness:
+    morning:
+      relevant_objects: ["cup", "kitchen_items", "bed"]
+      suggested_activities: ["waking", "breakfast", "preparing"]
+
+    afternoon:
+      relevant_objects: ["computer", "book", "table"]
+      suggested_activities: ["working", "studying", "activities"]
+
+    evening:
+      relevant_objects: ["television", "couch", "lamp"]
+      suggested_activities: ["relaxing", "entertainment", "dinner"]
+
+    night:
+      relevant_objects: ["bed", "blanket", "pillow", "lamp"]
+      suggested_activities: ["sleeping", "resting", "winding_down"]
+
+  # Activity inference
+  activity_inference:
+    - objects_present: ["book", "lamp", "chair"]
+      inferred_activity: "reading"
+      suggested_mood: "focused"
+
+    - objects_present: ["blanket", "couch", "television"]
+      inferred_activity: "relaxing"
+      suggested_mood: "comfortable"
+
+    - objects_present: ["computer", "desk", "cup"]
+      inferred_activity: "working"
+      suggested_mood: "productive"
+
+# Interaction Suggestions
+# -----------------------
+interaction_suggestions:
+  # Object-based conversation starters
+  object_mentions:
+    book:
+      questions:
+        - "What are you reading?"
+        - "Is that book interesting?"
+      comments:
+        - "I see you have a book there."
+
+    cup:
+      questions:
+        - "Would you like me to remind you about your drink?"
+        - "What are you drinking?"
+      comments:
+        - "Don't forget your drink!"
+
+    plush:
+      questions:
+        - "Does that plushie have a name?"
+      comments:
+        - "That's a cute plushie!"
+      emotional_response: "warm"
