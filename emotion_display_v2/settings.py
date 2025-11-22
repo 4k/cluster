@@ -70,6 +70,37 @@ class WindowSettings:
 
 
 @dataclass
+class RhubarbSettings:
+    """
+    Rhubarb Lip Sync integration settings.
+
+    Based on best practices from Rhubarb documentation and animation industry standards.
+    """
+    # Timing adjustments
+    lookahead_ms: float = 50.0      # Show visemes slightly early (ms) for natural look
+    hold_minimum_ms: float = 40.0   # Minimum viseme hold time (ms)
+
+    # Interpolation settings
+    transition_duration_ms: float = 60.0  # Time to transition between visemes
+    easing_function: str = "ease_in_out"  # linear, ease_in, ease_out, ease_in_out
+
+    # Coarticulation settings (blending adjacent visemes)
+    enable_coarticulation: bool = True
+    coarticulation_window_ms: float = 100.0  # Time window for coarticulation
+    coarticulation_strength: float = 0.3     # Blend strength (0-1)
+
+    # Extended shapes
+    use_extended_shapes: bool = True  # Use Rhubarb G, H, X shapes
+
+    # Animation quality
+    update_rate_hz: float = 60.0     # Update frequency for smooth animation
+
+    # Intensity
+    intensity_scale: float = 1.0     # Overall mouth movement intensity (0-1)
+    prefer_wide_mouth: bool = True   # Use shape D more often (more lively)
+
+
+@dataclass
 class RendererSettings:
     """Settings for content renderers."""
     # Eye renderer settings
@@ -89,6 +120,10 @@ class RendererSettings:
     mouth_transition_speed: float = 12.0
     mouth_idle_movement: bool = True
 
+    # Rhubarb-specific mouth settings
+    rhubarb_transition_speed: float = 18.0  # Faster for Rhubarb
+    enable_coarticulation: bool = True
+
     # General animation settings
     animation_smoothing: float = 0.15
     emotion_transition_speed: float = 2.0
@@ -96,12 +131,15 @@ class RendererSettings:
 
 @dataclass
 class DisplaySettings:
-    """Complete settings for the display system."""
+    """Complete settings for the display system with Rhubarb integration."""
     # Window configurations
     windows: Dict[str, WindowSettings] = field(default_factory=dict)
 
     # Renderer settings
     renderer: RendererSettings = field(default_factory=RendererSettings)
+
+    # Rhubarb lip sync settings
+    rhubarb: RhubarbSettings = field(default_factory=RhubarbSettings)
 
     # Event bus connection
     connect_event_bus: bool = True
@@ -205,8 +243,23 @@ class DisplaySettings:
                 'mouth_teeth_color': self.renderer.mouth_teeth_color,
                 'mouth_transition_speed': self.renderer.mouth_transition_speed,
                 'mouth_idle_movement': self.renderer.mouth_idle_movement,
+                'rhubarb_transition_speed': self.renderer.rhubarb_transition_speed,
+                'enable_coarticulation': self.renderer.enable_coarticulation,
                 'animation_smoothing': self.renderer.animation_smoothing,
                 'emotion_transition_speed': self.renderer.emotion_transition_speed
+            },
+            'rhubarb': {
+                'lookahead_ms': self.rhubarb.lookahead_ms,
+                'hold_minimum_ms': self.rhubarb.hold_minimum_ms,
+                'transition_duration_ms': self.rhubarb.transition_duration_ms,
+                'easing_function': self.rhubarb.easing_function,
+                'enable_coarticulation': self.rhubarb.enable_coarticulation,
+                'coarticulation_window_ms': self.rhubarb.coarticulation_window_ms,
+                'coarticulation_strength': self.rhubarb.coarticulation_strength,
+                'use_extended_shapes': self.rhubarb.use_extended_shapes,
+                'update_rate_hz': self.rhubarb.update_rate_hz,
+                'intensity_scale': self.rhubarb.intensity_scale,
+                'prefer_wide_mouth': self.rhubarb.prefer_wide_mouth
             },
             'connect_event_bus': self.connect_event_bus,
             'event_bus_retry_attempts': self.event_bus_retry_attempts,
@@ -220,7 +273,7 @@ class DisplaySettings:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'DisplaySettings':
-        """Create settings from dictionary."""
+        """Create settings from dictionary including Rhubarb configuration."""
         windows = {
             name: WindowSettings.from_dict(settings_data)
             for name, settings_data in data.get('windows', {}).items()
@@ -241,13 +294,32 @@ class DisplaySettings:
             mouth_teeth_color=tuple(renderer_data.get('mouth_teeth_color', (240, 240, 235))),
             mouth_transition_speed=renderer_data.get('mouth_transition_speed', 12.0),
             mouth_idle_movement=renderer_data.get('mouth_idle_movement', True),
+            rhubarb_transition_speed=renderer_data.get('rhubarb_transition_speed', 18.0),
+            enable_coarticulation=renderer_data.get('enable_coarticulation', True),
             animation_smoothing=renderer_data.get('animation_smoothing', 0.15),
             emotion_transition_speed=renderer_data.get('emotion_transition_speed', 2.0)
+        )
+
+        # Parse Rhubarb settings
+        rhubarb_data = data.get('rhubarb', {})
+        rhubarb = RhubarbSettings(
+            lookahead_ms=rhubarb_data.get('lookahead_ms', 50.0),
+            hold_minimum_ms=rhubarb_data.get('hold_minimum_ms', 40.0),
+            transition_duration_ms=rhubarb_data.get('transition_duration_ms', 60.0),
+            easing_function=rhubarb_data.get('easing_function', 'ease_in_out'),
+            enable_coarticulation=rhubarb_data.get('enable_coarticulation', True),
+            coarticulation_window_ms=rhubarb_data.get('coarticulation_window_ms', 100.0),
+            coarticulation_strength=rhubarb_data.get('coarticulation_strength', 0.3),
+            use_extended_shapes=rhubarb_data.get('use_extended_shapes', True),
+            update_rate_hz=rhubarb_data.get('update_rate_hz', 60.0),
+            intensity_scale=rhubarb_data.get('intensity_scale', 1.0),
+            prefer_wide_mouth=rhubarb_data.get('prefer_wide_mouth', True)
         )
 
         return cls(
             windows=windows,
             renderer=renderer,
+            rhubarb=rhubarb,
             connect_event_bus=data.get('connect_event_bus', True),
             event_bus_retry_attempts=data.get('event_bus_retry_attempts', 3),
             event_bus_retry_delay=data.get('event_bus_retry_delay', 1.0),
