@@ -342,14 +342,19 @@ class TTSService:
                 n_frames = wav_reader.getnframes()
                 audio_duration = n_frames / framerate
 
+                # Capture precise start timestamp BEFORE emitting event and writing audio
+                # AnimationService will use this exact timestamp as session start_time
+                start_timestamp = time.time()
+
                 # Emit AUDIO_PLAYBACK_STARTED right before first chunk is written
-                # This ensures precise sync with lip animations
+                # Include start_timestamp so animation uses the exact same reference point
                 self._emit_event_sync(
                     EventType.AUDIO_PLAYBACK_STARTED,
                     {
                         "text": text,
                         "audio_file": audio_path,
-                        "duration": audio_duration  # Duration in seconds for animation timing
+                        "duration": audio_duration,
+                        "start_timestamp": start_timestamp  # Precise moment audio starts
                     },
                     correlation_id=correlation_id
                 )

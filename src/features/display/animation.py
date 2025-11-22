@@ -250,11 +250,13 @@ class AnimationService:
         """Handle audio playback started - start lip sync session using cached data."""
         correlation_id = event.correlation_id
         text = event.data.get("text", "")
+        # Use the exact start timestamp from the audio thread for precise sync
+        start_timestamp = event.data.get("start_timestamp")
 
         # Check for cached lip sync data (generated during TTS_STARTED)
         if correlation_id and correlation_id in self._cached_lip_sync:
             lip_sync_data = self._cached_lip_sync.pop(correlation_id)
-            await self._start_lip_sync_session(lip_sync_data, correlation_id)
+            await self._start_lip_sync_session(lip_sync_data, correlation_id, start_timestamp)
             logger.info(f"Started lip sync session from cached data for {correlation_id}")
         elif text and self.enable_fallback:
             # No cached data - use text-based fallback
@@ -336,15 +338,28 @@ class AnimationService:
     async def _start_lip_sync_session(
         self,
         lip_sync_data: LipSyncData,
-        correlation_id: Optional[str]
+        correlation_id: Optional[str],
+        start_timestamp: Optional[float] = None
     ) -> None:
-        """Start a new lip sync playback session."""
+        """
+        Start a new lip sync playback session.
+
+        Args:
+            lip_sync_data: Pre-generated lip sync data from Rhubarb
+            correlation_id: Correlation ID for request tracing
+            start_timestamp: Exact timestamp when audio playback started.
+                           If provided, animation will sync to this time.
+        """
         session_id = f"lipsync_{time.time()}"
+
+        # Use the provided start_timestamp for precise sync with audio
+        # If not provided, fall back to current time
+        session_start_time = start_timestamp if start_timestamp else time.time()
 
         session = LipSyncSession(
             session_id=session_id,
             lip_sync_data=lip_sync_data,
-            start_time=time.time(),
+            start_time=session_start_time,
             correlation_id=correlation_id
         )
 
