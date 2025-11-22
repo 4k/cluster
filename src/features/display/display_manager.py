@@ -196,13 +196,7 @@ class DisplayManager:
         logger.debug(f"TTS started, waiting for audio playback (rhubarb_active={self._rhubarb_lip_sync_active})")
 
     async def _on_audio_playback_started(self, event) -> None:
-        """Handle audio playback start - begin mouth animation with proper timing."""
-        import asyncio
-
-        # Small delay to account for audio buffer latency (typically 50-100ms)
-        # This helps sync visual animation with audible speech
-        await asyncio.sleep(0.05)
-
+        """Handle audio playback start - begin mouth animation synchronized with audio."""
         # Only use text-based lip sync if Rhubarb lip sync is not active
         # Rhubarb lip sync will control mouth via MOUTH_SHAPE_UPDATE events
         if not self._rhubarb_lip_sync_active:

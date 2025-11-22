@@ -75,6 +75,7 @@ class TTSService:
         self.tts_queue = asyncio.Queue()
         self.is_processing = False
         self.is_running = False
+        self._loop = None  # Event loop reference for sync contexts
 
         # Audio file directory for lip sync
         if config.audio_output_dir:
@@ -91,6 +92,9 @@ class TTSService:
         logger.info("Initializing TTS service with event bus...")
         self.event_bus = await EventBus.get_instance()
 
+        # Store the event loop reference for use in sync contexts (thread pool)
+        self._loop = asyncio.get_running_loop()
+
         # Subscribe to response generated events
         self.event_bus.subscribe(EventType.RESPONSE_GENERATED, self._on_response_generated)
         self.event_bus.subscribe(EventType.SYSTEM_STOPPED, self._on_system_stopped)
@@ -100,6 +104,23 @@ class TTSService:
         asyncio.create_task(self._process_queue())
 
         logger.info("TTS service initialized with event bus and queue processor started")
+
+    def _emit_event_sync(self, event_type, data, correlation_id=None, source="tts"):
+        """Emit an event from a synchronous context (e.g., thread pool)."""
+        if self._loop and self._loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(
+                emit_event(event_type, data, correlation_id=correlation_id, source=source),
+                self._loop
+            )
+            # Don't wait - fire and forget for low latency
+            def handle_exception(f):
+                try:
+                    f.result()
+                except Exception as e:
+                    logger.error(f"Error emitting event {event_type}: {e}")
+            future.add_done_callback(handle_exception)
+        else:
+            logger.warning(f"Cannot emit event {event_type}: no running event loop")
 
     async def _on_system_stopped(self, event):
         """Handle system stopped event."""
@@ -189,23 +210,14 @@ class TTSService:
                     source="tts"
                 )
 
-            # Emit audio playback started event
-            if self.event_bus:
-                await emit_event(
-                    EventType.AUDIO_PLAYBACK_STARTED,
-                    {
-                        "text": text,
-                        "audio_file": str(audio_file) if audio_file else None
-                    },
-                    correlation_id=correlation_id,
-                    source="tts"
-                )
+            # NOTE: AUDIO_PLAYBACK_STARTED is emitted from inside _play_audio_file
+            # right when audio actually starts, for precise sync with animations
 
             # Run blocking speak in executor (use existing audio file if available)
             loop = asyncio.get_event_loop()
             if audio_file and audio_file.exists():
                 success = await loop.run_in_executor(
-                    None, self._play_audio_file, str(audio_file)
+                    None, self._play_audio_file, str(audio_file), text, correlation_id
                 )
             else:
                 success = await loop.run_in_executor(None, self.speak, text)
@@ -283,8 +295,13 @@ class TTSService:
             except Exception as e:
                 logger.warning(f"Failed to cleanup audio file {old_file}: {e}")
 
-    def _play_audio_file(self, audio_path: str) -> bool:
-        """Play an existing audio file."""
+    def _play_audio_file(self, audio_path: str, text: str = None, correlation_id: str = None) -> bool:
+        """
+        Play an existing audio file.
+
+        Emits AUDIO_PLAYBACK_STARTED right before first audio chunk is written,
+        ensuring precise synchronization with lip animations.
+        """
         try:
             print(f"\n🔊 Playing audio: {audio_path}")
 
@@ -304,6 +321,17 @@ class TTSService:
                 )
 
                 audio_data = wav_reader.readframes(wav_reader.getnframes())
+
+                # Emit AUDIO_PLAYBACK_STARTED right before first chunk is written
+                # This ensures precise sync with lip animations
+                self._emit_event_sync(
+                    EventType.AUDIO_PLAYBACK_STARTED,
+                    {
+                        "text": text,
+                        "audio_file": audio_path
+                    },
+                    correlation_id=correlation_id
+                )
 
                 for i in range(0, len(audio_data), self._audio_chunk_size):
                     chunk = audio_data[i:i+self._audio_chunk_size]
