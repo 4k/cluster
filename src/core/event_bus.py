@@ -631,7 +631,7 @@ if __name__ == "__main__":
         # 1. Test basic subscription
         print("1. Testing basic subscription...")
         async def basic_handler(event: Event):
-            print(f"   ✓ Basic handler received: {event.type.value} - {event.data}")
+            print(f"   [OK] Basic handler received: {event.type.value} - {event.data}")
 
         bus.subscribe([EventType.WAKE_WORD_DETECTED], basic_handler)
         await bus.emit(EventType.WAKE_WORD_DETECTED, {"confidence": 0.95})
@@ -643,7 +643,7 @@ if __name__ == "__main__":
 
         async def once_handler(event: Event):
             call_count["count"] += 1
-            print(f"   ✓ Once handler called (count: {call_count['count']})")
+            print(f"   [OK] Once handler called (count: {call_count['count']})")
 
         bus.once(EventType.SPEECH_DETECTED, once_handler)
         await bus.emit(EventType.SPEECH_DETECTED, {"text": "First call"})
@@ -660,9 +660,9 @@ if __name__ == "__main__":
         asyncio.create_task(emit_delayed())
         result = await bus.wait_for(EventType.TTS_COMPLETED, timeout=1.0)
         if result:
-            print(f"   ✓ Received waited event: {result.data}")
+            print(f"   [OK] Received waited event: {result.data}")
         else:
-            print("   ✗ Timeout waiting for event")
+            print("   [FAIL] Timeout waiting for event")
 
         # 4. Test middleware
         print("\n4. Testing middleware...")

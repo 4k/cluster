@@ -236,16 +236,16 @@ class LLMService:
                 )
 
                 if response.status_code in [200, 201]:
-                    print(f"✓ Detected working endpoint: {name} ({path})")
+                    print(f"[OK] Detected working endpoint: {name} ({path})")
                     self.detected_endpoint = name
                     self.api_type = name
                     return
                 else:
-                    print(f"✗ {name}: HTTP {response.status_code}")
+                    print(f"[FAIL] {name}: HTTP {response.status_code}")
             except Exception as e:
-                print(f"✗ {name}: {str(e)[:50]}")
+                print(f"[FAIL] {name}: {str(e)[:50]}")
 
-        print("⚠ Could not auto-detect endpoint, will try all methods")
+        print("[WARN] Could not auto-detect endpoint, will try all methods")
         self.api_type = "ollama-generate"  # fallback
 
     def send_request(
@@ -358,8 +358,10 @@ class LLMService:
             print(f"{'-'*60}\n")
 
             return answer
-        except json.JSONDecodeError:
-            print("ERROR: Invalid JSON response")
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Invalid JSON response (HTTP {response.status_code})")
+            print(f"Response content: {response.text[:500]}")
+            logger.error(f"JSON decode error: {e}, response: {response.text[:200]}")
             return None
 
     def _handle_stream_response(self, response: requests.Response) -> Optional[str]:
@@ -434,14 +436,14 @@ class LLMService:
 
             if response.status_code == 200:
                 models = response.json().get('models', [])
-                print(f"✓ Connected to Ollama at {self.base_url}")
+                print(f"[OK] Connected to Ollama at {self.base_url}")
                 print(f"Available models: {len(models)}")
                 for model in models:
                     print(f"  - {model.get('name', 'unknown')}")
                 print("="*60 + "\n")
                 return True
             elif response.status_code == 403:
-                print(f"✗ Access denied (403)")
+                print(f"[FAIL] Access denied (403)")
                 print(f"Response: {response.text}")
                 print("\nPossible issues:")
                 print("  1. Proxy/Envoy blocking access")
@@ -451,12 +453,12 @@ class LLMService:
                 print("="*60 + "\n")
                 return False
             else:
-                print(f"✗ HTTP {response.status_code}: {response.text[:200]}")
+                print(f"[FAIL] HTTP {response.status_code}: {response.text[:200]}")
                 print("="*60 + "\n")
                 return False
 
         except requests.exceptions.ConnectionError as e:
-            print(f"✗ Connection Error: Cannot reach {self.base_url}")
+            print(f"[FAIL] Connection Error: Cannot reach {self.base_url}")
             print(f"Details: {e}")
             print("\nPossible issues:")
             print("  1. Ollama is not running")
@@ -465,7 +467,7 @@ class LLMService:
             print("="*60 + "\n")
             return False
         except Exception as e:
-            print(f"✗ Cannot connect to Ollama: {e}")
+            print(f"[FAIL] Cannot connect to Ollama: {e}")
             print("="*60 + "\n")
             return False
 
@@ -511,16 +513,16 @@ class LLMService:
 
                 print(f"  Status: {resp.status_code}")
                 if resp.status_code == 200:
-                    print(f"  ✓ SUCCESS")
+                    print(f"  [OK] SUCCESS")
                 elif resp.status_code == 403:
-                    print(f"  ✗ FORBIDDEN - Access denied")
+                    print(f"  [FAIL] FORBIDDEN - Access denied")
                 elif resp.status_code == 404:
-                    print(f"  ✗ NOT FOUND - Endpoint doesn't exist")
+                    print(f"  [FAIL] NOT FOUND - Endpoint doesn't exist")
                 else:
-                    print(f"  ✗ {resp.text[:100]}")
+                    print(f"  [FAIL] {resp.text[:100]}")
 
             except Exception as e:
-                print(f"  ✗ ERROR: {str(e)[:80]}")
+                print(f"  [FAIL] ERROR: {str(e)[:80]}")
 
         print("\n" + "="*60 + "\n")
 

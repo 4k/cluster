@@ -334,7 +334,7 @@ class STTService:
                 return final_text
             else:
                 logger.warning("Vosk returned empty transcription")
-                print("⚠️  No speech detected")
+                print("[WARN] No speech detected")
                 return None
 
         except Exception as e:
@@ -410,7 +410,7 @@ class STTService:
                                 input_device_index=self.device_index,
                                 frames_per_buffer=buffer_size
                             )
-                            logger.info(f"✓ Successfully opened stream")
+                            logger.info("[OK] Successfully opened stream")
                             input_channels = test_channels
                             input_sample_rate = test_rate
                             adjusted_chunk_size = buffer_size

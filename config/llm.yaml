@@ -9,7 +9,7 @@
 # Connection Settings
 # -------------------
 # Base URL of the LLM server (Ollama instance or OpenAI-compatible API)
-base_url: "http://localhost:11434"
+base_url: "http://192.168.1.144:11434"
 
 # API key for authentication (required for OpenAI, optional for local Ollama)
 api_key: null
@@ -23,7 +23,7 @@ api_type: "auto"
 # Default model to use for requests
 # For Ollama: use model names like "llama3.2:3b", "qwen3-coder:30b", etc.
 # For OpenAI: use model names like "gpt-4", "gpt-3.5-turbo", etc.
-default_model: "llama3.2:3b"
+default_model: "deepseek-coder:33b-instruct"
 
 # System prompt for the assistant
 # This defines the personality and behavior of the assistant
