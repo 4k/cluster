@@ -249,7 +249,6 @@ class AnimationService:
     async def _on_audio_playback_started(self, event) -> None:
         """Handle audio playback started - start lip sync session using cached data."""
         correlation_id = event.correlation_id
-        text = event.data.get("text", "")
         # Use the exact start timestamp from the audio thread for precise sync
         start_timestamp = event.data.get("start_timestamp")
 
@@ -258,10 +257,10 @@ class AnimationService:
             lip_sync_data = self._cached_lip_sync.pop(correlation_id)
             await self._start_lip_sync_session(lip_sync_data, correlation_id, start_timestamp)
             logger.info(f"Started lip sync session from cached data for {correlation_id}")
-        elif text and self.enable_fallback:
-            # No cached data - use text-based fallback
-            await self._emit_fallback_start(text, correlation_id)
-            self.stats["fallback_used"] += 1
+        else:
+            # No cached data - Rhubarb failed or wasn't ready
+            # No fallback - just log it
+            logger.warning(f"No cached lip sync data for {correlation_id}, mouth will remain idle")
 
     async def _on_audio_playback_ended(self, event) -> None:
         """Handle audio playback ended - stop lip sync session."""
