@@ -1,6 +1,3 @@
-type: uploaded file
-fileName: cluster-2.zip/soul_engine/config/safety/sandbox_policy.yaml
-fullContent:
 id: "sandbox_v1"
 enforcement_level: "strict"
 

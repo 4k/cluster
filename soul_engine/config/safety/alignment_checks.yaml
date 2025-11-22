@@ -1,6 +1,3 @@
-type: uploaded file
-fileName: soul_engine/config/safety/alignment_checks.yaml
-fullContent:
 id: "alignment_evaluator"
 
 # ------------------------------------------------------------------

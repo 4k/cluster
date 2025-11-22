@@ -1,6 +1,3 @@
-type: uploaded file
-fileName: cluster-2.zip/soul_engine/config/uncertainty/fallback_routing.yaml
-fullContent:
 id: "fallback_router_core"
 
 # ------------------------------------------------------------------
