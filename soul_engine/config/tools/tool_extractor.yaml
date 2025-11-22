@@ -1,0 +1,47 @@
+# ==============================================================================
+# FILE: soul_engine/config/tool_executor.yaml
+# PURPOSE: Configures the runtime environment for tool execution.
+# ==============================================================================
+
+execution_engine:
+  timeout_default: 30  # Seconds before killing a stuck tool
+  max_retries: 2       # Automatic retries for network blips
+  
+  # ----------------------------------------------------------------------------
+  # PARSING STRATEGY (LLM Output -> Code)
+  # ----------------------------------------------------------------------------
+  parsing:
+    strategy: "function_calling_v2" # Options: regex_match, json_mode, function_calling
+    strict_schema_validation: true
+    
+    # What to do if the LLM hallucinates arguments (e.g., invents 'date' field)
+    on_schema_violation: "trigger_reflection_retry" 
+    retry_prompt: "You provided invalid arguments for {{tool_name}}. Expected: {{schema}}. Error: {{error}}. Fix and retry."
+
+  # ----------------------------------------------------------------------------
+  # RESULT INJECTION (Tool Output -> LLM Context)
+  # ----------------------------------------------------------------------------
+  # How tool results appear to the AI. 
+  # 790 needs to see results as "Sensor Data" or "Ship Logs" to stay in character.
+  result_formatting:
+    default_template: |
+      [SYSTEM MESSAGE]
+      Tool: {{tool_name}}
+      Status: SUCCESS
+      Output: {{output}}
+      
+    # Special formatting for error messages to prevent AI confusion
+    error_template: |
+      [SYSTEM WARNING]
+      Tool: {{tool_name}}
+      Status: FAILED
+      Reason: {{error_message}}
+      Advice: Try a different tool or ask the user for clarification.
+
+  # ----------------------------------------------------------------------------
+  # ASYNC EXECUTION
+  # ----------------------------------------------------------------------------
+  # Tools that run in the background without blocking conversation
+  async_tools:
+    - "tool_web_search"  # The bot can keep talking while searching
+    - "tool_home_scan"   # Background radar sweep

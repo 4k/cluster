@@ -1,0 +1,44 @@
+id: "render_engine_v1"
+
+# ------------------------------------------------------------------
+# 1. SIDE-CHANNEL PARSING
+# ------------------------------------------------------------------
+# As tokens arrive, the engine scans for tags to trigger actions
+# concurrently with speech (e.g., changing facial expression).
+stream_tag_processing:
+  enabled: true
+  
+  # Format: "I am <emotion='anger'>furious</emotion>!"
+  tag_format: "xml_style" 
+  strip_tags_from_audio: true # Don't read the tags aloud
+  
+  # Map tags to system events
+  triggers:
+    - tag: "emotion"
+      action: "update_avatar_expression"
+    - tag: "light"
+      action: "update_smart_lights"
+    - tag: "gesture"
+      action: "trigger_robot_servo"
+
+# ------------------------------------------------------------------
+# 2. PARTIAL UI UPDATES
+# ------------------------------------------------------------------
+# Visual feedback for screens while the audio generates
+visual_feedback:
+  typing_indicator:
+    style: "waveform" # Matches voice amplitude
+    persistence: "until_stream_end"
+    
+  # If the LLM generates a list, render bullet points 1-by-1
+  structured_output_rendering:
+    detect_markdown_lists: true
+    render_mode: "progressive_reveal"
+
+# ------------------------------------------------------------------
+# 3. LONG GENERATION HANDLING
+# ------------------------------------------------------------------
+# If the answer is huge (e.g., a long story), manage user attention.
+pagination_logic:
+  auto_pause_after_sentences: 5
+  continue_prompt: "Should I continue?" # Implicitly checks engagement

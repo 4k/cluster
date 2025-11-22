@@ -1,0 +1,180 @@
+# ==============================================================================
+# FILE: soul_engine/config/voice/voice_pipeline.yaml
+# PURPOSE: Maps personality states to voice synthesis parameters.
+# ARCHITECTURE: Emotion → Prosody mapping with per-soul overrides.
+# ==============================================================================
+
+voice_engine:
+  enabled: true
+
+  # ----------------------------------------------------------------------------
+  # DEFAULT PROVIDER SETTINGS
+  # ----------------------------------------------------------------------------
+  defaults:
+    provider: "elevenlabs"
+    model: "eleven_turbo_v2"
+
+    # Base prosody (neutral state)
+    base_parameters:
+      stability: 0.5
+      similarity_boost: 0.75
+      style: 0.0
+      speed: 1.0
+
+  # ----------------------------------------------------------------------------
+  # EMOTION → PROSODY MAPPING (Global Defaults)
+  # ----------------------------------------------------------------------------
+  # Souls can override these in their own voice config.
+  # Parameters follow ElevenLabs API but abstract for other providers.
+  emotion_mapping:
+
+    # Positive emotions
+    happy:
+      stability: 0.4          # More expressive variation
+      style: 0.6              # More animated
+      speed: 1.1              # Slightly faster
+      pitch_shift: 0.05       # Slightly higher
+
+    excited:
+      stability: 0.3
+      style: 0.8
+      speed: 1.2
+      pitch_shift: 0.1
+
+    loving:
+      stability: 0.6
+      style: 0.4
+      speed: 0.95
+      pitch_shift: 0.0
+      breathiness: 0.2        # Softer, more intimate
+
+    # Negative emotions
+    angry:
+      stability: 0.7          # More controlled aggression
+      style: 0.7
+      speed: 1.05
+      pitch_shift: -0.05      # Slightly lower
+      intensity: 0.8
+
+    sad:
+      stability: 0.6
+      style: 0.2
+      speed: 0.85             # Slower, more deliberate
+      pitch_shift: -0.1
+      breathiness: 0.1
+
+    fearful:
+      stability: 0.3          # Unstable, trembling
+      style: 0.5
+      speed: 1.15             # Faster, panicked
+      pitch_shift: 0.1
+
+    disgusted:
+      stability: 0.7
+      style: 0.4
+      speed: 0.9
+      pitch_shift: -0.05
+
+    # Cognitive states
+    thinking:
+      stability: 0.5
+      style: 0.2
+      speed: 0.9
+      insert_fillers: true    # "Hmm...", "Let me see..."
+
+    confused:
+      stability: 0.4
+      style: 0.3
+      speed: 0.85
+      pitch_variation: 0.2    # Rising intonation
+
+    # Character-specific base states
+    neutral:
+      stability: 0.5
+      style: 0.0
+      speed: 1.0
+
+    sarcastic:
+      stability: 0.6
+      style: 0.5
+      speed: 0.95
+      pitch_variation: 0.15   # Exaggerated intonation
+
+  # ----------------------------------------------------------------------------
+  # PERSONALITY STATE → EMOTION TRANSLATION
+  # ----------------------------------------------------------------------------
+  # Maps soul state machine modes to emotion profiles.
+  # Souls override this in their voice config.
+  state_emotion_defaults:
+    mode_neutral: "neutral"
+    mode_happy: "happy"
+    mode_angry: "angry"
+    mode_sad: "sad"
+
+  # ----------------------------------------------------------------------------
+  # SPEECH PATTERNS (Personality Expression)
+  # ----------------------------------------------------------------------------
+  speech_patterns:
+
+    # Punctuation affects prosody
+    punctuation_rules:
+      "!":
+        intensity_boost: 0.2
+        speed_boost: 0.05
+      "?":
+        pitch_end_rise: true
+      "...":
+        insert_pause_ms: 400
+        trailing_fade: true
+      "—":
+        insert_pause_ms: 200
+
+    # Emphasis markers (if model supports SSML or similar)
+    emphasis_detection:
+      all_caps: "strong"          # "I LOVE you" → emphasize LOVE
+      asterisks: "moderate"       # "*really*" → emphasize really
+      quotes: "ironic"            # Slight pitch shift for quoted words
+
+  # ----------------------------------------------------------------------------
+  # INTERRUPTION VOCALIZATION
+  # ----------------------------------------------------------------------------
+  # What sound to make when interrupted mid-speech
+  interruption_sounds:
+    default: null                 # Silent cut
+    acknowledged: "uh—"           # Verbal acknowledgment of interruption
+    annoyed: "tch!"               # Character-specific (for 790)
+
+  # ----------------------------------------------------------------------------
+  # FILLER GENERATION
+  # ----------------------------------------------------------------------------
+  # Sounds to emit while LLM is generating (reduces perceived latency)
+  thinking_fillers:
+    enabled: true
+    min_delay_before_filler_ms: 1500
+
+    default_fillers:
+      - "Hmm..."
+      - "Let me see..."
+      - "One moment..."
+
+    # Souls override with character-appropriate fillers
+
+  # ----------------------------------------------------------------------------
+  # PROVIDER ABSTRACTION
+  # ----------------------------------------------------------------------------
+  # Maps abstract parameters to provider-specific APIs
+  provider_adapters:
+    elevenlabs:
+      stability: "stability"
+      style: "style"
+      speed: "speed"
+      similarity_boost: "similarity_boost"
+
+    azure_neural:
+      stability: "prosody.rate"
+      pitch_shift: "prosody.pitch"
+      style: "style"
+
+    piper_local:
+      speed: "length_scale"
+      # Limited emotion support - falls back to base

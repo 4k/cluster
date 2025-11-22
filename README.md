@@ -1,6 +1,6 @@
 # AI Assistant
 
-A voice-activated AI assistant with speech-to-text (STT) and text-to-speech (TTS) capabilities using Piper-TTS and OpenWakeWord.
+a prototype for a foundational AI operating system. Tier 0 Agent Platform.
 
 ## Features
 

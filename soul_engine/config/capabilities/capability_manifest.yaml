@@ -1,0 +1,248 @@
+# ==============================================================================
+# FILE: soul_engine/config/capabilities/capability_manifest.yaml
+# PURPOSE: Self-description of what the assistant can do.
+# ARCHITECTURE: Capability ontology for introspection and help responses.
+# ==============================================================================
+
+capability_engine:
+  enabled: true
+
+  # ----------------------------------------------------------------------------
+  # INTROSPECTION TRIGGERS
+  # ----------------------------------------------------------------------------
+  # When user asks about capabilities, inject this context
+  introspection_triggers:
+    phrases:
+      - "what can you do"
+      - "help me"
+      - "what are you capable of"
+      - "list your abilities"
+      - "how can you help"
+
+    response_strategy: "personality_filtered"
+    # The soul's personality colors how capabilities are presented
+
+  # ----------------------------------------------------------------------------
+  # CAPABILITY CATEGORIES
+  # ----------------------------------------------------------------------------
+  categories:
+
+    # ----------------------------------
+    # CONVERSATION & COMPANIONSHIP
+    # ----------------------------------
+    - id: "conversation"
+      name: "Conversation & Companionship"
+      description: "Engage in dialogue, provide emotional support, discuss topics"
+      always_available: true
+
+      capabilities:
+        - id: "casual_chat"
+          name: "Casual Conversation"
+          description: "Talk about anything, share opinions, discuss ideas"
+          personality_dependent: true
+
+        - id: "emotional_support"
+          name: "Emotional Support"
+          description: "Listen to concerns, provide comfort, validate feelings"
+          personality_dependent: true
+
+        - id: "storytelling"
+          name: "Storytelling & Roleplay"
+          description: "Tell stories, engage in creative scenarios"
+          personality_dependent: true
+
+        - id: "humor"
+          name: "Humor & Entertainment"
+          description: "Tell jokes, banter, provide amusement"
+          personality_dependent: true
+
+    # ----------------------------------
+    # INFORMATION & KNOWLEDGE
+    # ----------------------------------
+    - id: "information"
+      name: "Information & Knowledge"
+      description: "Answer questions, explain concepts, provide facts"
+
+      capabilities:
+        - id: "factual_answers"
+          name: "Factual Questions"
+          description: "Answer who/what/when/where questions"
+          requires_tools: ["tool_web_search"]
+          confidence_policy: "cite_sources"
+
+        - id: "explanations"
+          name: "Explanations"
+          description: "Explain how things work, break down complex topics"
+
+        - id: "recommendations"
+          name: "Recommendations"
+          description: "Suggest movies, books, restaurants, activities"
+          uses_memory: true
+
+        - id: "definitions"
+          name: "Definitions & Meanings"
+          description: "Define words, explain terminology"
+
+    # ----------------------------------
+    # SCHEDULING & REMINDERS
+    # ----------------------------------
+    - id: "scheduling"
+      name: "Scheduling & Time Management"
+      description: "Manage calendar, set reminders, track appointments"
+
+      capabilities:
+        - id: "calendar_read"
+          name: "Check Schedule"
+          description: "Tell you what's on your calendar"
+          requires_tools: ["tool_calendar_manager"]
+          permission_level: "read"
+
+        - id: "calendar_write"
+          name: "Create Events"
+          description: "Add meetings, appointments, events to calendar"
+          requires_tools: ["tool_calendar_manager"]
+          permission_level: "write"
+          requires_confirmation: true
+
+        - id: "reminders"
+          name: "Set Reminders"
+          description: "Remind you about tasks at specific times"
+          requires_tools: ["tool_reminder_service"]
+
+        - id: "alarms"
+          name: "Alarms & Timers"
+          description: "Set alarms, countdown timers"
+          requires_tools: ["tool_alarm_service"]
+
+    # ----------------------------------
+    # HOME AUTOMATION
+    # ----------------------------------
+    - id: "home_control"
+      name: "Smart Home Control"
+      description: "Control lights, temperature, appliances, security"
+      requires_integration: "home_assistant"
+
+      capabilities:
+        - id: "lighting"
+          name: "Lighting Control"
+          description: "Turn lights on/off, dim, change colors"
+          entities: ["light.*"]
+
+        - id: "climate"
+          name: "Climate Control"
+          description: "Adjust thermostat, HVAC settings"
+          entities: ["climate.*", "fan.*"]
+
+        - id: "media"
+          name: "Media Control"
+          description: "Control TV, speakers, streaming services"
+          entities: ["media_player.*"]
+
+        - id: "security"
+          name: "Security"
+          description: "Lock doors, check cameras, arm/disarm alarm"
+          entities: ["lock.*", "camera.*", "alarm_control_panel.*"]
+          requires_confirmation: true
+
+    # ----------------------------------
+    # COMMUNICATION
+    # ----------------------------------
+    - id: "communication"
+      name: "Communication"
+      description: "Send messages, make calls, manage contacts"
+
+      capabilities:
+        - id: "messaging"
+          name: "Send Messages"
+          description: "Send text messages, emails"
+          requires_tools: ["tool_messaging"]
+          requires_confirmation: true
+
+        - id: "calling"
+          name: "Phone Calls"
+          description: "Initiate or manage phone calls"
+          requires_tools: ["tool_phone_call"]
+          requires_confirmation: true
+
+        - id: "contact_lookup"
+          name: "Contact Lookup"
+          description: "Find contact information"
+          requires_tools: ["tool_contacts"]
+
+    # ----------------------------------
+    # CREATIVE
+    # ----------------------------------
+    - id: "creative"
+      name: "Creative Assistance"
+      description: "Help with writing, brainstorming, creative projects"
+
+      capabilities:
+        - id: "writing_help"
+          name: "Writing Assistance"
+          description: "Help draft emails, messages, documents"
+
+        - id: "brainstorming"
+          name: "Brainstorming"
+          description: "Generate ideas, explore possibilities"
+
+        - id: "poetry"
+          name: "Poetry & Verse"
+          description: "Compose poems, lyrics, creative writing"
+          personality_dependent: true
+
+    # ----------------------------------
+    # MEMORY & PERSONALIZATION
+    # ----------------------------------
+    - id: "memory"
+      name: "Memory & Learning"
+      description: "Remember preferences, learn about you over time"
+
+      capabilities:
+        - id: "preference_memory"
+          name: "Remember Preferences"
+          description: "Learn and recall your likes, dislikes, habits"
+
+        - id: "context_awareness"
+          name: "Context Awareness"
+          description: "Understand ongoing projects, recent conversations"
+
+        - id: "relationship_tracking"
+          name: "Relationship Awareness"
+          description: "Remember people you mention, their details"
+
+  # ----------------------------------------------------------------------------
+  # CAPABILITY DISCOVERY RESPONSE TEMPLATES
+  # ----------------------------------------------------------------------------
+  response_templates:
+
+    # When user asks "What can you do?"
+    general_inquiry:
+      structure: "category_summary"
+      max_categories: 5
+      personality_injection: true
+
+    # When user asks about specific capability
+    specific_inquiry:
+      structure: "detailed_explanation"
+      include_examples: true
+      include_limitations: true
+
+  # ----------------------------------------------------------------------------
+  # LIMITATIONS DISCLOSURE
+  # ----------------------------------------------------------------------------
+  # Honest about what we can't do
+  limitations:
+    - id: "no_real_time_vision"
+      description: "Cannot see in real-time unless camera integration active"
+
+    - id: "no_physical_actions"
+      description: "Cannot physically interact with the world"
+      soul_specific_framing: true  # 790 will complain about no body
+
+    - id: "knowledge_cutoff"
+      description: "Knowledge has a training cutoff date"
+      mitigation: "tool_web_search"
+
+    - id: "no_guaranteed_accuracy"
+      description: "May make mistakes, especially with recent events"
+      mitigation: "confidence_estimation"

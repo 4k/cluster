@@ -1,0 +1,39 @@
+id: "epistemic_engine_v1"
+
+# ------------------------------------------------------------------
+# 1. SCORING MECHANISMS
+# ------------------------------------------------------------------
+scorers:
+  - id: "logprob_average"
+    weight: 0.4
+    description: "Raw token probability from the LLM."
+    
+  - id: "verbalized_uncertainty"
+    weight: 0.6
+    description: "Ask the model: 'On a scale of 0-1, how sure are you?' (Hidden pass)."
+
+# ------------------------------------------------------------------
+# 2. THRESHOLD DEFINITIONS
+# ------------------------------------------------------------------
+confidence_levels:
+  - label: "certain"
+    min_score: 0.9
+    action: "respond_immediately"
+
+  - label: "ambiguous"
+    range: [0.6, 0.89]
+    action: "add_hedging_language" # e.g., "It appears that..."
+
+  - label: "unsafe"
+    max_score: 0.59
+    action: "trigger_fallback_routing"
+
+# ------------------------------------------------------------------
+# 3. FACTUAL GROUNDING CHECK
+# ------------------------------------------------------------------
+# For queries tagged as 'informational' (e.g., "Who is the president?"),
+# the system performs a cross-check.
+hallucination_check:
+  enabled_for_intents: ["fact_query", "news_query", "technical_support"]
+  method: "rag_verification" # Check answer against retrieved docs
+  penalty_if_unsupported: -0.3 # Reduce confidence if no source found

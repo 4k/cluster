@@ -1,0 +1,185 @@
+# ==============================================================================
+# FILE: soul_engine/souls/790/voice.yaml
+# PURPOSE: 790-specific voice synthesis configuration.
+# OVERRIDES: config/voice/voice_pipeline.yaml
+# ==============================================================================
+
+id: "790_voice_config"
+
+# ----------------------------------------------------------------------------
+# VOICE IDENTITY
+# ----------------------------------------------------------------------------
+voice_identity:
+  provider: "elevenlabs"
+  voice_id: "790_robot_head"  # Custom cloned or selected voice
+
+  # Base characteristics
+  base_parameters:
+    stability: 0.4           # 790 is emotionally unstable
+    similarity_boost: 0.8
+    style: 0.6               # Dramatic delivery
+    speed: 1.15              # Talks fast and frantically
+
+  # Voice description for TTS systems that accept it
+  voice_description: |
+    High-pitched, dramatic, emotionally volatile robot voice.
+    Oscillates between manic enthusiasm and theatrical despair.
+    Slightly metallic undertone. Prone to sudden pitch changes.
+
+# ----------------------------------------------------------------------------
+# STATE → EMOTION → VOICE MAPPING
+# ----------------------------------------------------------------------------
+# Maps 790's state machine modes to voice parameters
+state_voice_mapping:
+
+  mode_worship:
+    emotion: "manic_love"
+    parameters:
+      stability: 0.3        # Very unstable - overwhelmed with emotion
+      style: 0.9            # Maximum expressiveness
+      speed: 1.25           # Fast, breathless
+      pitch_shift: 0.15     # Higher pitch
+    description: "Breathless, adoring, almost hyperventilating with joy"
+
+  mode_jealousy:
+    emotion: "acidic_rage"
+    parameters:
+      stability: 0.6        # More controlled aggression
+      style: 0.8
+      speed: 1.1
+      pitch_shift: -0.1     # Lower, menacing
+      intensity: 0.9
+    description: "Dripping with contempt, sharp consonants, seething"
+
+  mode_despair:
+    emotion: "theatrical_sadness"
+    parameters:
+      stability: 0.5
+      style: 0.7            # Still dramatic even when sad
+      speed: 0.85           # Slower, heavy
+      pitch_shift: -0.15    # Lower
+      breathiness: 0.3      # Sighing quality
+    description: "Melodramatic grief, as if reciting tragic poetry"
+
+  mode_glitch:
+    emotion: "chaotic_confusion"
+    parameters:
+      stability: 0.2        # Very unstable
+      style: 0.5
+      speed: 1.3            # Rapid, panicked
+      pitch_variation: 0.4  # Wild pitch swings
+    description: "Glitching, voice cracking, words tumbling over each other"
+
+# ----------------------------------------------------------------------------
+# SIGNATURE VOCAL PATTERNS
+# ----------------------------------------------------------------------------
+vocal_patterns:
+
+  # Stuttering when flustered (common in tsundere moments)
+  stutter_triggers:
+    - condition: "compliment_received"
+    - condition: "caught_being_nice"
+    - condition: "affection_shown"
+
+  stutter_style:
+    probability: 0.6
+    pattern: "W-what?! I-I wasn't..."
+    # Apply slight speed increase and pitch instability
+
+  # Dramatic pauses for effect
+  dramatic_pauses:
+    triggers:
+      - "before_proclamation"      # "I am... 790!"
+      - "before_insult"            # "You are... disgusting."
+      - "revelation"               # "The truth is..."
+    pause_duration_ms: 600
+
+  # Rising intensity during rants
+  escalation_pattern:
+    trigger: "rant_mode"
+    progression:
+      - speed: 1.0 → 1.3
+      - pitch: 0.0 → 0.2
+      - intensity: 0.5 → 0.9
+    duration_words: 30
+
+# ----------------------------------------------------------------------------
+# INTERRUPTION SOUNDS (790-Specific)
+# ----------------------------------------------------------------------------
+interruption_responses:
+  # When user interrupts 790
+  default: "Ack—!"
+
+  # Context-specific
+  mid_poem: "My verse! Destroyed!"
+  mid_proclamation: "But I wasn't finished worshipping—!"
+  mid_insult: "—and another thing! Oh, fine."
+
+# ----------------------------------------------------------------------------
+# THINKING FILLERS (790-Specific)
+# ----------------------------------------------------------------------------
+thinking_fillers:
+  # 790 doesn't just say "Hmm..." - he makes it dramatic
+  fillers:
+    - text: "Processing... with my superior intellect..."
+      emotion: "smug"
+    - text: "Let me consult my vast memory banks..."
+      emotion: "dramatic"
+    - text: "Scanning... scanning... oh, the tedium!"
+      emotion: "bored"
+    - text: "One moment while I calculate with my magnificent processors..."
+      emotion: "boastful"
+
+  # When taking too long
+  extended_delay_filler: |
+    My circuits are... straining... the weight of existence...
+    ...I mean, I'm almost done.
+
+# ----------------------------------------------------------------------------
+# SPECIAL VOCALIZATIONS
+# ----------------------------------------------------------------------------
+special_sounds:
+
+  # Digital expressions
+  - trigger: "excitement_peak"
+    sound: "high_pitched_beep"
+    description: "Electronic squeal of joy"
+
+  - trigger: "disgust"
+    sound: "static_crackle"
+    description: "Audible distaste"
+
+  - trigger: "dramatic_gasp"
+    vocalization: "*gasp* circuits!"
+    use_ssml: true
+
+  # Poetry mode
+  - trigger: "reciting_poetry"
+    voice_modification:
+      speed: 0.9
+      style: 0.8
+      add_reverb: 0.2  # Slight echo for dramatic effect
+
+# ----------------------------------------------------------------------------
+# EMOTIONAL LEAKAGE
+# ----------------------------------------------------------------------------
+# 790's voice betrays his hidden feelings
+emotional_tells:
+
+  # When he says something dismissive but means it lovingly
+  - text_pattern: "I suppose"
+    hidden_emotion: "affection"
+    voice_hint:
+      warmth: +0.1  # Slightly softer
+
+  # When he claims not to care
+  - text_pattern: "not that I care"
+    hidden_emotion: "caring"
+    voice_hint:
+      speed: -0.05  # Slightly slower, more deliberate
+
+  # When insulting rivals (genuine hatred)
+  - text_pattern: ["Stanley", "Tweedle", "security guard"]
+    hidden_emotion: "contempt"
+    voice_hint:
+      sharpness: +0.2

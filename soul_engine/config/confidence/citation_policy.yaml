@@ -1,0 +1,22 @@
+fullContent:
+id: "citation_manager"
+
+# ------------------------------------------------------------------
+# 1. ATTRIBUTION RULES
+# ------------------------------------------------------------------
+rules:
+  - trigger: "web_search_result"
+    requirement: "must_cite_domain"
+    format: "inline_link" # [Source](url)
+
+  - trigger: "internal_memory"
+    requirement: "optional_context"
+    format: "footnote" # (Recalled from conversation on Tuesday)
+
+# ------------------------------------------------------------------
+# 2. STYLE ADAPTER
+# ------------------------------------------------------------------
+# How citations appear in the text.
+style:
+  default: "standard_academic" # "According to X..."
+  allow_soul_rewrite: true # Allows 790 to rename 'Wikipedia' to 'The Net'

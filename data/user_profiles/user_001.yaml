@@ -1,0 +1,19 @@
+user_id: "user_001"
+# Automatically captured:
+last_seen: "2025-11-22T21:00:00Z"
+wake_word_count: 58
+
+# Explicitly Stored/Learned by the system:
+display_name: "The Mistress" # The name 790 uses
+real_name: "Xev"
+personal_history:
+  - "User is vegetarian."
+  - "User's favorite color is magenta."
+  - "User expressed dislike for Stanley Tweedle (Good)."
+  - "User usually arrives home at 6:30 PM."
+
+# 790's Personal Relationship Variables (The Rapport Engine)
+790_relationship_variables:
+  affection_score: 75 # Out of 100
+  recent_sentiment: "positive"
+  last_complaint: "You are loud"

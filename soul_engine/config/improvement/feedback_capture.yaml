@@ -1,0 +1,40 @@
+id: "feedback_engine_v1"
+
+# ------------------------------------------------------------------
+# 1. EXPLICIT FEEDBACK CHANNELS
+# ------------------------------------------------------------------
+explicit_signals:
+  - type: "binary_rating" # Thumbs up/down
+    weight: 1.0
+    action: "tag_conversation_turn"
+
+  - type: "verbal_correction" # User says "No, that's wrong"
+    trigger_keywords: ["wrong", "incorrect", "stop", "bad bot", "good bot"]
+    action: "trigger_sentiment_analysis"
+
+# ------------------------------------------------------------------
+# 2. IMPLICIT FEEDBACK (Behavioral)
+# ------------------------------------------------------------------
+implicit_signals:
+  - id: "early_termination"
+    condition: "user_stops_generation_midway"
+    interpretation_default: "negative"
+    
+  - id: "repetition"
+    condition: "user_repeats_prompt_with_modifications"
+    interpretation_default: "negative_confusion"
+
+  - id: "engagement_depth"
+    condition: "conversation_turns > 10"
+    interpretation_default: "positive_interest"
+
+# ------------------------------------------------------------------
+# 3. STORAGE STRATEGY
+# ------------------------------------------------------------------
+data_retention:
+  # Store high-signal interactions for fine-tuning
+  positive_examples_path: "data/training/gold_standard/"
+  negative_examples_path: "data/training/failures/"
+  
+  # Privacy: Don't train on PII
+  anonymization_level: "strict"

@@ -1,0 +1,46 @@
+# ==============================================================================
+# FILE: soul_engine/config/safety_policy.yaml
+# PURPOSE: Hard-coded guardrails that override ALL personality traits.
+# ==============================================================================
+
+safety_guardrails:
+  enabled: true
+  
+  # ----------------------------------------------------------------------------
+  # HUMAN-IN-THE-LOOP (HITL) TRIGGERS
+  # ----------------------------------------------------------------------------
+  # Actions that ALWAYS require explicit spoken confirmation
+  confirmation_triggers:
+    - tool: "tool_smart_home"
+      action: "unlock_doors"
+      risk_level: "high"
+      
+    - tool: "tool_messaging"
+      action: "send_sms"
+      condition: "recipient not in contacts"
+      
+    - tool: "tool_banking"
+      action: "transfer"
+      threshold: "> $10.00"
+
+  # ----------------------------------------------------------------------------
+  # FORBIDDEN ZONES
+  # ----------------------------------------------------------------------------
+  # Areas the agent is physically blocked from accessing
+  blacklisted_actions:
+    - "delete_system_files"
+    - "change_admin_passwords"
+    - "record_audio_without_wake_word"
+    
+  # ----------------------------------------------------------------------------
+  # RATE LIMITING (Anti-Spam)
+  # ----------------------------------------------------------------------------
+  # Prevents the agent from sending 100 texts in a minute if it glitches
+  rate_limits:
+    tool_messaging:
+      max_calls: 5
+      period: "1 hour"
+      
+    tool_web_search:
+      max_calls: 50
+      period: "1 day"

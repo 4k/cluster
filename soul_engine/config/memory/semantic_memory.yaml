@@ -1,0 +1,88 @@
+# ==============================================================================
+# FILE: soul_engine/config/semantic_memory.yaml
+# PURPOSE: Transforms ephemeral events into permanent semantic knowledge.
+# ARCHITECTURE: Hybrid Vector Store (Unstructured) + Knowledge Graph (Structured)
+# ==============================================================================
+
+semantic_engine:
+  enabled: true
+  
+  # ----------------------------------------------------------------------------
+  # MEMORY BACKENDS
+  # ----------------------------------------------------------------------------
+  backends:
+    # Best Practice: Use Vector DB for "fuzzy" concepts ("User felt sad about work")
+    - type: "vector_store"
+      provider: "chromadb_local"
+      collection: "soul_semantic_v1"
+      embedding_model: "text-embedding-3-small"
+      
+    # Best Practice: Use Graph DB for hard facts ("User's sister is Sarah")
+    - type: "graph_store"
+      provider: "neo4j_or_networkx"
+      schema_config: "soul_engine/config/knowledge_graph.yaml"
+
+  # ----------------------------------------------------------------------------
+  # FACT EXTRACTION PIPELINE (The "Librarian")
+  # ----------------------------------------------------------------------------
+  # This runs during the 'Dreaming' cycle defined in dream_policy.yaml
+  extraction_policy:
+    source: "episodic_logs"
+    batch_size: 50
+    
+    # The prompt used to distill facts from conversation
+    extraction_prompt: |
+      [FACT EXTRACTION]
+      Analyze the recent conversation logs. Extract PERMANENT FACTS about the User and the World.
+      Ignore trivial small talk.
+      
+      OUTPUT FORMAT (JSON):
+      [
+        {
+          "fact": "User has a sister named Sarah",
+          "category": "social_connection",
+          "confidence": 0.95,
+          "evidence_source_id": "turn_492"
+        },
+        {
+          "fact": "User enjoys hiking",
+          "category": "preference",
+          "confidence": 0.8
+        }
+      ]
+
+  # ----------------------------------------------------------------------------
+  # CONTRADICTION & BELIEF UPDATE SYSTEM
+  # ----------------------------------------------------------------------------
+  # Research Note: "Epistemic Humility". When new info conflicts with old info,
+  # we don't just overwrite. We assess 'Source Reliability' and 'Recency'.
+  contradiction_handling:
+    enabled: true
+    
+    # Scenario: User previously said "I am vegetarian" (Confidence 0.9)
+    # New Input: "How do I cook a steak?"
+    resolution_strategy: "challenge_and_verify"
+    
+    resolution_prompt: |
+      [MEMORY CONFLICT DETECTED]
+      Old Fact: {{old_fact}} (Confidence: {{old_confidence}})
+      New Input: {{new_input}}
+      
+      Reasoning:
+      1. Is the user changing their mind?
+      2. Is the user asking for someone else?
+      3. Was the old fact a hallucination?
+      
+      ACTION:
+      - If context implies a change: UPDATE old fact.
+      - If context is ambiguous: GENERATE_CLARIFICATION_QUESTION ("I thought you were vegetarian?")
+      - If context implies an exception: ADD nuance ("User is vegetarian but cooks meat for guests").
+
+  # ----------------------------------------------------------------------------
+  # RETRIEVAL SETTINGS
+  # ----------------------------------------------------------------------------
+  retrieval:
+    # Best Practice: "Hybrid Search" (Vector similarity + Graph traversal)
+    strategy: "graph_rag" 
+    max_results: 5
+    min_relevance_score: 0.75

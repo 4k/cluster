@@ -1,0 +1,60 @@
+id: "context_inference_engine_v1"
+
+# ------------------------------------------------------------------
+# SCENARIO DEFINITIONS
+# ------------------------------------------------------------------
+scenarios:
+  # ----------------------------------------------------------------
+  # STATE: HOME ALONE (Total isolation)
+  # ----------------------------------------------------------------
+  - id: "scenario_void"
+    priority: 1
+    conditions:
+      presence_radar: false
+      vision_person: false
+      audio_voice: false
+    
+  # ----------------------------------------------------------------
+  # STATE: HIDDEN PRESENCE (Radar/Audio YES, Camera NO)
+  # ----------------------------------------------------------------
+  - id: "scenario_lurking"
+    priority: 2
+    conditions:
+      # Complex Logic: Someone is here, but I can't see them.
+      match_all:
+        - condition: "vision_person == false"
+        - match_any:
+            - condition: "presence_radar == true"
+            - condition: "audio_voice == true"
+            - condition: "wake_word_triggered_recently == true"
+
+  # ----------------------------------------------------------------
+  # STATE: WORKING / STUDYING
+  # ----------------------------------------------------------------
+  - id: "scenario_focus"
+    priority: 5
+    conditions:
+      vision_person: true
+      vision_objects: ["laptop", "books", "monitor"]
+      audio_level: "low" # Quiet room
+      time_of_day: "daytime"
+
+  # ----------------------------------------------------------------
+  # STATE: PARTY / CHAOS
+  # ----------------------------------------------------------------
+  - id: "scenario_party"
+    priority: 8
+    conditions:
+      vision_person_count: "> 2" # More than 2 people
+      audio_level: "high"
+      audio_class: ["music", "laughter", "chatter"]
+
+  # ----------------------------------------------------------------
+  # STATE: ALONE WITH PETS
+  # ----------------------------------------------------------------
+  - id: "scenario_pet_caretaker"
+    priority: 4
+    conditions:
+      presence_radar: true # Radar detects movement (the pet)
+      vision_person: false # No human
+      vision_objects: ["cat", "dog"]

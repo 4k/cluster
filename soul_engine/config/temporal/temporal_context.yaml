@@ -1,0 +1,30 @@
+id: "temporal_sense_core"
+
+# ------------------------------------------------------------------
+# 1. STANDARD TIME BUCKETS
+# ------------------------------------------------------------------
+time_phases:
+  - id: "morning"
+    range: ["06:00", "11:59"]
+    description: "Start of the user's active day."
+    
+  - id: "work_hours"
+    range: ["09:00", "17:00"]
+    description: "Standard business hours. Expect professional focus."
+    
+  - id: "evening"
+    range: ["17:00", "22:00"]
+    description: "Post-work personal time."
+    
+  - id: "night"
+    range: ["22:00", "06:00"]
+    description: "Rest period. Low activity."
+
+# ------------------------------------------------------------------
+# 2. DURATION ESTIMATION
+# ------------------------------------------------------------------
+duration_estimates:
+  - task_type: "quick_reply"
+    estimated_minutes: 2
+  - task_type: "deep_work"
+    estimated_minutes: 60

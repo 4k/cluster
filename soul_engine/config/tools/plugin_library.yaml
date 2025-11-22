@@ -1,0 +1,23 @@
+plugins:
+  # General Information Access
+  - id: "tool_web_search"
+    name: "Web Browser / RAG"
+    description: "Accesses real-time data from the internet (News, facts, external lore)."
+    output_context: "external_knowledge"
+    
+  # High-Agency Utility
+  - id: "tool_calendar_manager"
+    name: "Calendar/Scheduling"
+    description: "Reads, adds, or modifies user meetings and reminders."
+    required_permissions: ["calendar_write"]
+    output_context: "user_schedule"
+    
+  # Communications and Commerce
+  - id: "tool_phone_call"
+    name: "Phone/Messaging"
+    description: "Initiates calls or sends messages via user's linked phone app."
+    required_permissions: ["phone_call", "sms_send"]
+    
+  - id: "tool_grocery_order"
+    name: "E-Commerce/Ordering"
+    description: "Adds items to a shared list or places grocery orders."

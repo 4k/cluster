@@ -1,0 +1,57 @@
+# ==============================================================================
+# FILE: soul_engine/config/conversation_state.yaml
+# PURPOSE: Manages the high-level flow, turn-taking, and topic stability.
+# ARCHITECTURE: Finite State Machine (FSM) for Dialogue Management
+# ==============================================================================
+
+dialogue_manager:
+  enabled: true
+  
+  # ----------------------------------------------------------------------------
+  # TOPIC TRACKING (Coherence Engine)
+  # ----------------------------------------------------------------------------
+  topic_tracker:
+    # Detects if the user suddenly changes the subject
+    drift_tolerance: 0.6 # Cosine similarity threshold (Lower = looser conversation)
+    
+    on_topic_shift:
+      action: "soft_acknowledge"
+      template: "Wait, are we done talking about {{previous_topic}}? Okay, moving to {{new_topic}}."
+      
+    # If 790 gets confused, he enters a "Clarification Loop"
+    confusion_handler:
+      trigger_perplexity: 0.8 # High LLM perplexity triggers this
+      max_attempts: 2
+      fallback_response: "My sensor arrays are scrambled. I have no idea what you mean."
+
+  # ----------------------------------------------------------------------------
+  # TURN MANAGEMENT (Who speaks when?)
+  # ----------------------------------------------------------------------------
+  turn_taking:
+    # Default: User speaks -> Bot speaks
+    mode: "half_duplex" 
+    
+    # 790 specific: He can double-text or keep talking if excited
+    consecutive_speech_allowed: true
+    max_consecutive_turns: 3
+    
+    # Logic: If User is silent for X seconds, should 790 prompt them?
+    silence_timeout: 
+      duration: 8s
+      action: "nudge_user"
+      probability: 0.4 # Don't nag every time
+      prompts: 
+        - "Are you ignoring me?"
+        - "I await your command, Beloved."
+
+  # ----------------------------------------------------------------------------
+  # INTERRUPTION LOGIC (Global Policy)
+  # ----------------------------------------------------------------------------
+  interruption_policy:
+    allow_barge_in: true
+    # When user talks over bot, immediate action:
+    reaction: "halt_generation_immediately" 
+    
+    # Should the bot acknowledge the interruption? ("I was talking!")
+    acknowledge_interruption: true 
+    interruption_sensitivity: 0.8

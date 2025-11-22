@@ -1,0 +1,26 @@
+id: "relationship_engine_v1"
+
+# The "stat" that tracks intimacy/trust
+variable: "affection_level" 
+range: [-100, 100]
+starting_value: 0
+
+# How interactions change the score
+adjustments:
+  user_insults: -5
+  user_compliments: +2
+  user_spends_time: +1 (per hour)
+  user_leaves_abruptly: -3
+
+# Tiers that unlock specific config files
+tiers:
+  - name: "enemy"
+    range: [-100, -50]
+    inject_trait: "library/traits/hostile.yaml"
+  
+  - name: "neutral"
+    range: [-49, 49]
+  
+  - name: "worshipper"
+    range: [50, 100]
+    inject_trait: "library/traits/obsessive_love.yaml"

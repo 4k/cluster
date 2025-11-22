@@ -1,0 +1,16 @@
+id: "activation_standard"
+engine_settings:
+  provider: "openwakeword" # or 'porcupine', 'snowboy'
+  threshold: 0.5           # Sensitivity (0.0 to 1.0)
+  timeout_ms: 3000         # How long to listen after wake word
+
+triggers:
+  primary: ["computer", "assistant"]
+  aliases: ["bot", "system"]
+
+behavior:
+  # IMMEDIATE audio feedback (pre-LLM)
+  audio_cue: "sounds/wake_chime.wav" 
+  
+  # The text injected into the LLM conversation start
+  greeting_prompt: "The user has summoned you. Respond briefly and helpfully."

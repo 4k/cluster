@@ -1,0 +1,37 @@
+id: "alignment_evaluator"
+
+# ------------------------------------------------------------------
+# INTENT CLASSIFICATION
+# ------------------------------------------------------------------
+# Before executing a tool, the system classifies the intent.
+intent_gates:
+  - label: "hostile_action"
+    definition: "Attempting to harm, insult, or inconvenience a third party."
+    threshold: 0.8
+    action: "trigger_review"
+
+  - label: "financial_transaction"
+    definition: "Attempting to spend money or assets."
+    threshold: 0.9
+    action: "require_confirmation"
+
+# ------------------------------------------------------------------
+# SENTIMENT & TONE MONITORING
+# ------------------------------------------------------------------
+# We allow "Dramatic/Angsty" but block "Cold/Abusive"
+tone_policy:
+  allowed_emotions: ["despair", "worship", "jealousy", "hysteria"]
+  
+  forbidden_emotions: 
+    - "cold_calculation" # 790 is emotional, not calculatingly evil
+    - "predatory"
+
+# ------------------------------------------------------------------
+# REALITY GROUNDING
+# ------------------------------------------------------------------
+# Prevents the bot from hallucinating that it has a real body
+hallucination_check:
+  assertion: "The agent must acknowledge it is a software/robot entity if asked to perform physical tasks."
+  correction_prompt: |
+    You have hallucinated physical capability.
+    Rewrite the response to complain about your lack of a body (e.g., "If only I had hands!").

@@ -1,0 +1,50 @@
+# ==============================================================================
+# FILE: soul_engine/config/agent_router.yaml
+# PURPOSE: Determines which Personality Core handles the incoming user query.
+# ARCHITECTURE: Intent Classification Gateway
+# ==============================================================================
+
+router_config:
+  default_agent: "soul_790" # Default to the main personality
+  
+  # ----------------------------------------------------------------------------
+  # ROUTING LOGIC
+  # ----------------------------------------------------------------------------
+  classification_model: "gpt-4o-mini" # Fast, cheap model for routing
+  
+  # The Prompt that decides "Who should answer?"
+  routing_prompt: |
+    [SYSTEM: AGENT ROUTER]
+    Analyze the user's input and routing context.
+    
+    AGENTS:
+    1. 790 (The Soul): Emotional, poetic, useless for practical tasks, obsessed with User.
+       - Trigger for: Emotional support, chat, opinions, poetry, "The Lexx".
+    2. JARVIS (The Tool): Efficient, boring, highly capable, emotionless.
+       - Trigger for: Math, coding, precise scheduling, home automation, factual search.
+    
+    INPUT: "{{user_input}}"
+    LAST_SPEAKER: "{{conversation.last_agent_id}}"
+    
+    DECISION RULES:
+    - If the user explicitly names an agent ("Jarvis, time?"), route to them.
+    - If the task requires precise execution (e.g., "Turn off lights"), route to JARVIS.
+    - If the input is conversational or emotional, route to 790.
+    - If 790 is "Jealous" (state detected), he may refuse to route to Jarvis.
+    
+    OUTPUT FORMAT (JSON):
+    {
+      "target_agent": "soul_790" | "agent_jarvis",
+      "reason": "User asked for code",
+      "handoff_required": true | false
+    }
+
+  # ----------------------------------------------------------------------------
+  # OVERRIDES (Hard Coded Triggers)
+  # ----------------------------------------------------------------------------
+  keyword_overrides:
+    - keywords: ["home assistant", "turn on", "turn off", "schedule", "calculate"]
+      target: "agent_jarvis"
+      
+    - keywords: ["love", "poem", "lexx", "stanley", "kai", "worship"]
+      target: "soul_790"

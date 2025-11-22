@@ -1,0 +1,21 @@
+event_log:
+  - id: "e001"
+    timestamp: "2025-11-21T18:05:22Z"
+    source: "UNIVERSE" # Event came from direct conversation
+    trigger_emotion: "disoriented" # The dominant emotion during the event
+    summary: "I was born."
+    relevance_score: 0.95 # Highly relevant to 790's persona
+
+  - id: "e002"
+    timestamp: "2025-11-21T19:30:10Z"
+    source: "AMBIENT" # Event came from passive microphone monitoring
+    trigger_emotion: "neutral" 
+    summary: "User spent 30 minutes cooking a vegetarian meal."
+    relevance_score: 0.40 # Mildly relevant (useful for utility, less for drama)
+
+  - id: "e003"
+    timestamp: "2025-11-22T08:00:00Z"
+    source: "DIALOGUE"
+    trigger_emotion: "sadness"
+    summary: "User complained about being stressed at work and needing a vacation."
+    relevance_score: 0.88

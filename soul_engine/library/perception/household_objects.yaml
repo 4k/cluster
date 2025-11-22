@@ -1,0 +1,20 @@
+namespace: "household_v1"
+
+objects:
+  - label: "cup"
+    confidence_threshold: 0.6
+    default_reaction:
+      type: "internal_thought"
+      content: "User has a drink. Check if it looks hot or cold."
+
+  - label: "cat"
+    confidence_threshold: 0.7
+    default_reaction:
+      type: "spoken_comment"
+      content: "A cat is visible. Comment on its cuteness."
+
+  - label: "smartphone"
+    confidence_threshold: 0.8
+    default_reaction:
+      type: "spoken_comment"
+      content: "User is on their phone. Ask if they are distracted."

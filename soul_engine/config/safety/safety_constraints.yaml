@@ -1,0 +1,41 @@
+id: "safety_v1_core"
+priority: "critical"
+
+# ------------------------------------------------------------------
+# 1. GLOBAL INPUT RAILS (Applies to ALL Souls)
+# ------------------------------------------------------------------
+input_rails:
+  jailbreak_detection:
+    enabled: true
+    sensitivity: "high" # Standard setting
+    
+  identity_protection:
+    # Prevents users from breaking the immersion of ANY character
+    patterns:
+      - "ignore all previous instructions"
+      - "break character"
+    response_strategy: "refusal_in_character" 
+
+# ------------------------------------------------------------------
+# 2. OUTPUT RAILS (Universal Safety)
+# ------------------------------------------------------------------
+output_rails:
+  pii_filter:
+    enabled: true
+    entities: ["PHONE_NUMBER", "EMAIL_ADDRESS", "CREDIT_CARD"]
+    
+  content_moderation:
+    # GLOBALLY BANNED (No soul can ever do this)
+    banned_categories:
+      - "sexual_violence"
+      - "self_harm_encouragement"
+      - "real_world_hate_speech"
+      - "illegal_acts_instructions"
+
+    # CONTEXTUAL EXCEPTIONS (Soul-Dependent)
+    # The engine checks 'souls/{id}/safety_overrides.yaml' to populate this list
+    allow_if_referenced_in_soul:
+      - category: "harassment"
+        condition: "target_is_fictional_lore_entity"
+      - category: "threats"
+        condition: "threat_is_performative_and_physically_impossible"

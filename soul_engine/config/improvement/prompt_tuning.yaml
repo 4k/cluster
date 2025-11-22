@@ -1,0 +1,33 @@
+id: "auto_tuner_v1"
+
+# ------------------------------------------------------------------
+# 1. DYNAMIC FEW-SHOT INJECTION
+# ------------------------------------------------------------------
+# Automatically adds "Good" examples to the prompt context
+few_shot_learning:
+  enabled: true
+  max_examples: 3
+  
+  # How to find relevant examples
+  retrieval_strategy: "semantic_similarity"
+  source_pool: "data/training/gold_standard/"
+
+# ------------------------------------------------------------------
+# 2. NEGATIVE CONSTRAINT OPTIMIZATION
+# ------------------------------------------------------------------
+# If the AI keeps making the same mistake, add a temporary rule.
+negative_constraints:
+  enabled: true
+  trigger_threshold: 3 # 3 failures of the same type in 24h
+  action: "append_system_instruction"
+  
+  # Example: If AI keeps failing to format dates, add "ALWAYS USE ISO-8601"
+  expiration: "48h" # Remove rule after 2 days to prevent prompt bloating
+
+# ------------------------------------------------------------------
+# 3. SAFETY GUARDRAIL
+# ------------------------------------------------------------------
+# Prevent the AI from optimizing itself into a jailbreak
+immutable_core:
+  - "safety_constraints.yaml"
+  - "alignment_checks.yaml"

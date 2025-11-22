@@ -1,0 +1,54 @@
+# ==============================================================================
+# FILE: soul_engine/config/context_window_manager.yaml
+# PURPOSE: Budgets tokens to prevent overflow and reduce cost/latency.
+# STRATEGY: "Rolling Window" with "Selective Retention"
+# ==============================================================================
+
+context_budgeting:
+  max_total_tokens: 128000 # Model limit
+  target_generation_tokens: 4000 # Reserved for output
+  
+  # ----------------------------------------------------------------------------
+  # COMPARTMENTALIZATION (The "Prompt Sandwich")
+  # ----------------------------------------------------------------------------
+  # Defines how much space each section gets in the prompt
+  allocations:
+    system_instructions: 
+      priority: "critical" # Never truncate
+      max_tokens: 2000
+      
+    rag_knowledge:
+      priority: "high"
+      max_tokens: 4000
+      strategy: "relevance_sort"
+      
+    recent_history:
+      priority: "medium"
+      max_tokens: 8000
+      strategy: "sliding_window"
+      
+    tools_scratchpad:
+      priority: "low"
+      max_tokens: 1000
+      strategy: "truncate_oldest"
+
+  # ----------------------------------------------------------------------------
+  # COMPRESSION STRATEGIES (Garbage Collection)
+  # ----------------------------------------------------------------------------
+  pruning_triggers:
+    # Run cleanup when context hits 80% capacity
+    threshold: 0.80 
+    
+    actions:
+      # 1. Summarize the middle of the conversation (The "Accordion" Method)
+      - target: "recent_history[10:-10]" # Keep first 10 and last 10 turns raw
+        method: "summarize_to_bullet_points"
+        
+      # 2. Drop verbose tool outputs (e.g., huge JSONs from web search)
+      - target: "tool_outputs"
+        method: "extract_key_values"
+        
+      # 3. Remove visual descriptions if not referenced recently
+      - target: "vision_logs"
+        method: "delete_if_stale"
+        stale_age: 5m

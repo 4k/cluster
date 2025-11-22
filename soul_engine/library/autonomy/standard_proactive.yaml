@@ -1,0 +1,43 @@
+id: "autonomy_standard"
+enabled: true
+
+# ------------------------------------------------------------------
+# 1. THE "ITCH" (Time-based internal desire)
+# ------------------------------------------------------------------
+internal_drive:
+  # How often the engine recalculates the probability (The "Tick")
+  tick_rate_seconds: 30
+  
+  # How much "Desire" builds up per tick (0.0 to 1.0)
+  boredom_rate: 0.02
+  
+  # If 1.0 is reached, the bot MUST speak.
+  # If 0.0, the bot is perfectly content with silence.
+  decay_on_speech: 1.0 # Reset to 0 after talking
+
+# ------------------------------------------------------------------
+# 2. EXTERNAL TRIGGERS (News, Weather, System Events)
+# ------------------------------------------------------------------
+event_triggers:
+  - source: "weather_api"
+    # Only trigger if the event's native importance is > 0.7 (e.g., Storm Warning)
+    min_importance: 0.7 
+    # How much this event adds to the "Desire" score immediately
+    desire_boost: 0.5 
+
+  - source: "news_feed"
+    min_importance: 0.8
+    desire_boost: 0.3
+
+# ------------------------------------------------------------------
+# 3. THE DECISION GATE (Will I talk?)
+# ------------------------------------------------------------------
+# Formula: Probability = (Current_Desire * weight) + (Event_Importance * weight)
+decision_logic:
+  threshold: 0.6 # Minimum score required to attempt to speak
+  randomness: 0.1 # Add +/- 10% variance to make it less robotic
+  
+  # Do not speak during these hours
+  quiet_hours: 
+    start: "23:00"
+    end: "07:00"

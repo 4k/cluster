@@ -1,0 +1,34 @@
+id: "scheduler_v1_core"
+
+# ------------------------------------------------------------------
+# 1. STANDARD LOGIC
+# ------------------------------------------------------------------
+deadline_policy:
+  poll_interval_seconds: 60
+  
+  # Standard alerts (Can be customized by Soul, but defaults exist)
+  alert_thresholds:
+    - time_remaining: "1h"
+      urgency: "high"
+      action: "notify_user"
+
+# ------------------------------------------------------------------
+# 2. CONFLICT RESOLUTION (Neutral)
+# ------------------------------------------------------------------
+conflict_logic:
+  default_strategy: "ask_user" # Default behavior: "You have two meetings, what do I do?"
+
+  priorities:
+    - level: 100
+      type: "medical_emergency"
+    - level: 50
+      type: "work_commitment"
+
+  # ----------------------------------------------------------------
+  # 3. PERSONALITY INTERCEPT (The Hook)
+  # ----------------------------------------------------------------
+  # Before booking, the engine runs this check against the Soul's logic
+  booking_intercept_hook:
+    enabled: true
+    source: "active_soul.policies.scheduling_bias"
+    # If the Soul returns "VETO", the booking fails.
