@@ -18,8 +18,8 @@ except ImportError:
     print("pygame not installed - run: pip install pygame")
     sys.exit(1)
 
-from src.display.v2.renderers.mouth_renderer import MouthRenderer
-from src.display.v2.rhubarb_controller import RhubarbVisemeController, RhubarbControllerConfig
+from src.display.renderers.mouth_renderer import MouthRenderer
+from src.display.rhubarb_controller import RhubarbVisemeController, RhubarbControllerConfig
 
 
 def main():

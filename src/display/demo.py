@@ -8,9 +8,9 @@ This demonstrates the dual-window facial animation with:
 - Synchronized via event bus and centralized decision module
 
 Usage:
-    python -m emotion_display_v2.demo
-    python -m emotion_display_v2.demo --single    # Single combined window
-    python -m emotion_display_v2.demo --debug     # Include debug window
+    python -m src.display.demo
+    python -m src.display.demo --single    # Single combined window
+    python -m src.display.demo --debug     # Include debug window
 """
 
 import argparse
@@ -22,7 +22,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from emotion_display_v2 import (
+from src.display import (
     DisplayManager,
     DisplaySettings,
     WindowSettings,
@@ -185,10 +185,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python -m emotion_display_v2.demo           # Default dual-window mode
-  python -m emotion_display_v2.demo --single  # Single combined window
-  python -m emotion_display_v2.demo --debug   # Include debug window
-  python -m emotion_display_v2.demo --demo    # Run automated demo sequence
+  python -m src.display.demo           # Default dual-window mode
+  python -m src.display.demo --single  # Single combined window
+  python -m src.display.demo --debug   # Include debug window
+  python -m src.display.demo --demo    # Run automated demo sequence
         """
     )
 
