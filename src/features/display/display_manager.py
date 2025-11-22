@@ -339,11 +339,16 @@ class DisplayManager:
         self.set_emotion('THINKING')
 
     async def _on_response_generated(self, event) -> None:
-        """Handle response generation complete."""
-        text = event.data.get('response', '')
-        if text:
-            self.set_animation_state('SPEAKING')
-            self.speak_text(text)
+        """Handle response generation complete.
+
+        NOTE: We intentionally do NOT start animation here.
+        Animation is controlled ONLY by MOUTH_SHAPE_UPDATE events from AnimationService,
+        which are synchronized with audio playback via shared timestamps.
+        """
+        # Don't start animation here - it would be premature
+        # Animation will start when AnimationService emits MOUTH_SHAPE_UPDATE events
+        # after audio playback actually begins
+        logger.debug(f"Response generated, waiting for TTS and Rhubarb to sync animation")
 
     async def _on_error(self, event) -> None:
         """Handle error event."""

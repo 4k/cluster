@@ -758,13 +758,17 @@ class MouthRenderer(BaseRenderer):
         self._generic_speak_phase = 0.0
 
     def stop_speaking(self) -> None:
-        """Stop speaking animation."""
+        """Stop speaking animation and reset Rhubarb state."""
         self.mouth_state.is_speaking = False
         self.mouth_state.speak_text = ""
         self._target_open = 0.0
         self._target_pucker = 0.0
         self._target_stretch = 0.0
         self.mouth_state.mouth.current_viseme = Viseme.SILENCE
+
+        # Also stop any active Rhubarb session
+        if self.mouth_state.rhubarb_active:
+            self.stop_rhubarb_session()
 
     def set_viseme(self, viseme: Viseme, intensity: float = 1.0) -> None:
         """
