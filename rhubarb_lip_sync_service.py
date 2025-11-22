@@ -16,6 +16,7 @@ import asyncio
 import json
 import logging
 import os
+import platform
 import subprocess
 import tempfile
 import time
@@ -25,6 +26,10 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+# Project paths
+PROJECT_ROOT = Path(__file__).parent
+VENDOR_RHUBARB_DIR = PROJECT_ROOT / "vendor" / "rhubarb"
 
 
 class RhubarbViseme(Enum):
@@ -124,8 +129,25 @@ class RhubarbLipSyncService:
         logger.info(f"RhubarbLipSyncService initialized (rhubarb: {self.rhubarb_path})")
 
     def _find_rhubarb(self) -> str:
-        """Find the rhubarb executable."""
-        # Common installation locations
+        """Find the rhubarb executable, checking vendor directory first."""
+        import shutil
+
+        # Determine executable name based on platform
+        executable_name = "rhubarb.exe" if platform.system() == "Windows" else "rhubarb"
+
+        # 1. Check vendor directory first (bundled with application)
+        vendor_path = VENDOR_RHUBARB_DIR / executable_name
+        if vendor_path.exists() and os.access(str(vendor_path), os.X_OK):
+            logger.info(f"Using bundled Rhubarb: {vendor_path}")
+            return str(vendor_path)
+
+        # 2. Check if rhubarb is in PATH
+        rhubarb_in_path = shutil.which("rhubarb")
+        if rhubarb_in_path:
+            logger.info(f"Using system Rhubarb: {rhubarb_in_path}")
+            return rhubarb_in_path
+
+        # 3. Check common installation locations
         search_paths = [
             "/usr/local/bin/rhubarb",
             "/usr/bin/rhubarb",
@@ -134,22 +156,17 @@ class RhubarbLipSyncService:
             "/opt/rhubarb/rhubarb",
         ]
 
-        # Check if rhubarb is in PATH
-        import shutil
-        rhubarb_in_path = shutil.which("rhubarb")
-        if rhubarb_in_path:
-            return rhubarb_in_path
-
-        # Check common locations
         for path in search_paths:
             if os.path.isfile(path) and os.access(path, os.X_OK):
+                logger.info(f"Using Rhubarb at: {path}")
                 return path
 
+        # Not found - provide installation instructions
         logger.warning(
-            "Rhubarb executable not found. Please install Rhubarb Lip Sync "
-            "from https://github.com/DanielSWolf/rhubarb-lip-sync"
+            "Rhubarb executable not found. Run 'python scripts/setup_rhubarb.py' "
+            "to install it, or download from https://github.com/DanielSWolf/rhubarb-lip-sync"
         )
-        return "rhubarb"  # Assume it's in PATH
+        return str(vendor_path)  # Return expected path even if not found
 
     def is_available(self) -> bool:
         """Check if Rhubarb is available and working."""
@@ -377,6 +394,33 @@ class RhubarbLipSyncService:
         logger.debug("Lip sync cache cleared")
 
 
+def ensure_rhubarb_installed(auto_install: bool = False) -> bool:
+    """
+    Ensure Rhubarb is installed, optionally auto-installing if not found.
+
+    Args:
+        auto_install: If True, automatically download and install Rhubarb
+
+    Returns:
+        True if Rhubarb is available
+    """
+    service = RhubarbLipSyncService()
+    if service.is_available():
+        return True
+
+    if auto_install:
+        print("Rhubarb not found. Installing...")
+        try:
+            from scripts.setup_rhubarb import setup_rhubarb, verify_installation
+            setup_rhubarb()
+            return verify_installation()
+        except Exception as e:
+            print(f"Auto-install failed: {e}")
+            return False
+
+    return False
+
+
 # Standalone testing
 if __name__ == "__main__":
     import sys
@@ -386,11 +430,34 @@ if __name__ == "__main__":
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
 
+    # Check for --install flag
+    if "--install" in sys.argv:
+        sys.argv.remove("--install")
+        print("Installing Rhubarb Lip Sync...")
+        try:
+            from scripts.setup_rhubarb import setup_rhubarb, verify_installation
+            setup_rhubarb()
+            if verify_installation():
+                print("\nRhubarb installed successfully!")
+            else:
+                print("\nInstallation may have issues.")
+                sys.exit(1)
+        except Exception as e:
+            print(f"Installation failed: {e}")
+            sys.exit(1)
+
+        if len(sys.argv) == 1:
+            sys.exit(0)
+
     service = RhubarbLipSyncService()
 
     if not service.is_available():
-        print("Rhubarb is not available. Please install it first.")
-        print("See: https://github.com/DanielSWolf/rhubarb-lip-sync")
+        print("Rhubarb is not available.")
+        print("\nTo install, run one of:")
+        print("  python rhubarb_lip_sync_service.py --install")
+        print("  python scripts/setup_rhubarb.py")
+        print("\nOr download manually from:")
+        print("  https://github.com/DanielSWolf/rhubarb-lip-sync/releases")
         sys.exit(1)
 
     # Test with a sample audio file if provided
