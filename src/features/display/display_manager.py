@@ -83,6 +83,9 @@ class DisplayManager:
             'fallback_used': 0
         }
 
+        # Pending text for animation sync (set on TTS_STARTED, used on AUDIO_PLAYBACK_STARTED)
+        self._pending_speak_text: Optional[str] = None
+
         logger.info("DisplayManager initialized with Rhubarb integration")
 
     @property
@@ -163,6 +166,9 @@ class DisplayManager:
             self.event_bus.subscribe(EventType.LIP_SYNC_STARTED, self._on_lip_sync_started)
             self.event_bus.subscribe(EventType.LIP_SYNC_COMPLETED, self._on_lip_sync_completed)
 
+            # Subscribe to audio playback events for proper timing
+            self.event_bus.subscribe(EventType.AUDIO_PLAYBACK_STARTED, self._on_audio_playback_started)
+
             self._event_bus_connected = True
             logger.info("Connected to event bus")
             return True
@@ -176,21 +182,23 @@ class DisplayManager:
 
     # Event handlers
     async def _on_tts_started(self, event) -> None:
-        """Handle TTS start - begin speaking animation."""
+        """Handle TTS start - just log, don't start any animation yet."""
         text = event.data.get('text', '')
         audio_file = event.data.get('audio_file')
 
-        self.set_animation_state('SPEAKING')
+        # Store text for reference (not used for animation anymore)
+        self._pending_speak_text = text
 
-        # Only use text-based lip sync if Rhubarb lip sync is not active
-        # Rhubarb lip sync will control mouth via MOUTH_SHAPE_UPDATE events
-        if not self._rhubarb_lip_sync_active:
-            if text:
-                self.speak_text(text)
-            else:
-                self.start_speaking()
+        # DON'T set animation state here - it triggers premature animation
+        # Animation will only start when MOUTH_SHAPE_UPDATE events arrive from Rhubarb
 
-        logger.debug(f"TTS started (rhubarb_active={self._rhubarb_lip_sync_active})")
+        logger.debug(f"TTS started, waiting for Rhubarb lip sync data")
+
+    async def _on_audio_playback_started(self, event) -> None:
+        """Handle audio playback start - Rhubarb handles ALL animation now."""
+        # No text-based fallback - only Rhubarb animation is used
+        # Animation will start when AnimationService emits MOUTH_SHAPE_UPDATE events
+        logger.debug(f"Audio playback started, Rhubarb will handle lip sync")
 
     async def _on_lip_sync_started(self, event) -> None:
         """Handle Rhubarb lip sync started - configure for Rhubarb control."""
@@ -198,17 +206,10 @@ class DisplayManager:
         self._rhubarb_session_id = event.data.get('session_id')
         self._rhubarb_stats['sessions_started'] += 1
 
-        # Stop any text-based animation that might be running
-        self.stop_speaking()
+        # DON'T call set_animation_state or route SPEAK_START - these trigger generic animation
+        # Mouth animation is controlled ONLY by MOUTH_SHAPE_UPDATE events
 
-        # Set speaking state without text animation
-        self.set_animation_state('SPEAKING')
-
-        # Notify mouth renderer of Rhubarb session start
-        self.window_manager.decision_module.route_event(
-            DisplayEvent.SPEAK_START,
-            {'session_id': self._rhubarb_session_id, 'rhubarb': True}
-        )
+        logger.info(f"Rhubarb lip sync session started: {self._rhubarb_session_id}")
 
         # Load lip sync data into controller if provided
         cues = event.data.get('cues', [])
@@ -338,11 +339,16 @@ class DisplayManager:
         self.set_emotion('THINKING')
 
     async def _on_response_generated(self, event) -> None:
-        """Handle response generation complete."""
-        text = event.data.get('response', '')
-        if text:
-            self.set_animation_state('SPEAKING')
-            self.speak_text(text)
+        """Handle response generation complete.
+
+        NOTE: We intentionally do NOT start animation here.
+        Animation is controlled ONLY by MOUTH_SHAPE_UPDATE events from AnimationService,
+        which are synchronized with audio playback via shared timestamps.
+        """
+        # Don't start animation here - it would be premature
+        # Animation will start when AnimationService emits MOUTH_SHAPE_UPDATE events
+        # after audio playback actually begins
+        logger.debug(f"Response generated, waiting for TTS and Rhubarb to sync animation")
 
     async def _on_error(self, event) -> None:
         """Handle error event."""
@@ -387,14 +393,15 @@ class DisplayManager:
         """Start generic speaking animation."""
         self.window_manager.start_speaking()
 
-    def speak_text(self, text: str) -> None:
+    def speak_text(self, text: str, duration: float = None) -> None:
         """
         Start speaking with text-based lip sync.
 
         Args:
             text: Text to animate
+            duration: Audio duration in seconds (for animation timing sync)
         """
-        self.window_manager.start_speaking(text)
+        self.window_manager.start_speaking(text, duration=duration)
 
     def stop_speaking(self) -> None:
         """Stop speaking animation."""

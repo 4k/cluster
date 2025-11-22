@@ -284,9 +284,9 @@ class WindowManager:
         """Set animation state for all windows."""
         return self.decision_module.set_animation_state(state)
 
-    def start_speaking(self, text: Optional[str] = None) -> int:
+    def start_speaking(self, text: Optional[str] = None, duration: float = None) -> int:
         """Start speaking animation."""
-        return self.decision_module.start_speaking(text)
+        return self.decision_module.start_speaking(text, duration=duration)
 
     def stop_speaking(self) -> int:
         """Stop speaking animation."""

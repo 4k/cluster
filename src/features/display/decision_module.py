@@ -383,10 +383,13 @@ class DisplayDecisionModule:
         """Set animation state for all windows."""
         return self.broadcast_event(DisplayEvent.ANIMATION_STATE, {'state': state})
 
-    def start_speaking(self, text: Optional[str] = None) -> int:
+    def start_speaking(self, text: Optional[str] = None, duration: float = None) -> int:
         """Start speaking animation."""
         if text:
-            return self.route_event(DisplayEvent.SPEAK_TEXT, {'text': text})
+            data = {'text': text}
+            if duration is not None:
+                data['duration'] = duration
+            return self.route_event(DisplayEvent.SPEAK_TEXT, data)
         else:
             return self.route_event(DisplayEvent.SPEAK_START, {})
 

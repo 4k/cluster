@@ -243,13 +243,13 @@ class STTService:
         logger.info("Received SYSTEM_STOPPED event, stopping STT service...")
         self.stop()
 
-    async def _transcribe_speech(self, audio_stream, correlation_id=None):
+    def _transcribe_speech_blocking(self, audio_stream):
         """
-        Transcribe speech after wake word is detected using Vosk.
+        Blocking speech transcription using Vosk.
+        This runs in a thread pool to avoid blocking the event loop.
 
         Args:
             audio_stream: PyAudio stream object to record from
-            correlation_id: Correlation ID for request tracing
 
         Returns:
             str: Transcribed text or None if recognition failed
@@ -287,14 +287,6 @@ class STTService:
                 if rms < self.silence_threshold_rms:  # Silence threshold from config
                     silent_chunks += 1
                     if silent_chunks > max_silent_chunks and final_text:
-                        # Emit silence detected event
-                        if self.event_bus:
-                            await emit_event(
-                                EventType.SILENCE_DETECTED,
-                                {"duration": silent_chunks * chunk_size / actual_rate},
-                                correlation_id=correlation_id,
-                                source="stt"
-                            )
                         break  # Stop if we've had enough silence and got some text
                 else:
                     silent_chunks = 0
@@ -304,7 +296,33 @@ class STTService:
             if final_result.get("text"):
                 final_text += " " + final_result["text"]
 
-            final_text = final_text.strip()
+            return final_text.strip()
+
+        except Exception as e:
+            logger.error(f"Transcription error: {e}", exc_info=True)
+            print(f"❌ Error: {e}")
+            return None
+
+    async def _transcribe_speech(self, audio_stream, correlation_id=None):
+        """
+        Transcribe speech after wake word is detected using Vosk.
+        Runs blocking audio I/O in a thread pool to avoid blocking the event loop.
+
+        Args:
+            audio_stream: PyAudio stream object to record from
+            correlation_id: Correlation ID for request tracing
+
+        Returns:
+            str: Transcribed text or None if recognition failed
+        """
+        try:
+            # Run blocking transcription in thread pool to avoid blocking event loop
+            loop = asyncio.get_event_loop()
+            final_text = await loop.run_in_executor(
+                None,  # Use default thread pool
+                self._transcribe_speech_blocking,
+                audio_stream
+            )
 
             if final_text:
                 logger.info(f"Vosk transcription: {final_text}")

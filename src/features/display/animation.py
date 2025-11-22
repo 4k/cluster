@@ -96,6 +96,10 @@ class AnimationService:
         # Pending lip sync requests (audio file -> text mapping)
         self._pending_requests: Dict[str, str] = {}
 
+        # Cached lip sync data (correlation_id -> LipSyncData)
+        # Populated when TTS_STARTED is received, used when AUDIO_PLAYBACK_STARTED arrives
+        self._cached_lip_sync: Dict[str, LipSyncData] = {}
+
         # Statistics
         self.stats = {
             "sessions_started": 0,
@@ -191,7 +195,7 @@ class AnimationService:
         logger.info("AnimationService stopped")
 
     async def _on_tts_started(self, event) -> None:
-        """Handle TTS started event - prepare lip sync data."""
+        """Handle TTS started event - generate lip sync data synchronously."""
         text = event.data.get("text", "")
         audio_file = event.data.get("audio_file")  # Optional
         correlation_id = event.correlation_id
@@ -202,38 +206,61 @@ class AnimationService:
 
         logger.info(f"TTS started: preparing lip sync for '{text[:50]}...'")
 
-        # If audio file is provided, generate lip sync immediately
-        if audio_file and os.path.isfile(audio_file):
-            await self._prepare_lip_sync(audio_file, text, correlation_id)
-        else:
-            # Store pending request - will process when audio playback starts
-            if correlation_id:
-                self._pending_requests[correlation_id] = text
-
-    async def _on_audio_playback_started(self, event) -> None:
-        """Handle audio playback started - start lip sync session."""
-        audio_file = event.data.get("audio_file")
-        correlation_id = event.correlation_id
-        text = event.data.get("text", "")
-
-        # Check for pending text from TTS_STARTED
-        if correlation_id and correlation_id in self._pending_requests:
-            text = self._pending_requests.pop(correlation_id)
-
-        # Generate lip sync if we have audio and text
+        # Generate lip sync data synchronously (TTS will wait for LIP_SYNC_READY)
         if audio_file and os.path.isfile(audio_file):
             lip_sync_data = await self._generate_lip_sync(audio_file, text)
 
             if lip_sync_data:
-                await self._start_lip_sync_session(
-                    lip_sync_data, correlation_id
+                # Cache the data for when audio playback starts
+                if correlation_id:
+                    self._cached_lip_sync[correlation_id] = lip_sync_data
+
+                # Emit LIP_SYNC_READY so TTS knows it can start playback
+                from src.core.event_bus import EventType, emit_event
+                await emit_event(
+                    EventType.LIP_SYNC_READY,
+                    {
+                        "correlation_id": correlation_id,
+                        "duration": lip_sync_data.duration,
+                        "cue_count": len(lip_sync_data.cues),
+                        "audio_file": audio_file
+                    },
+                    source="animation_service",
+                    correlation_id=correlation_id
                 )
-            elif self.enable_fallback and text:
-                # Fall back to text-based animation via display manager
-                await self._emit_fallback_start(text, correlation_id)
-        elif text:
-            # No audio file, use text-based fallback
-            await self._emit_fallback_start(text, correlation_id)
+                logger.info(f"Lip sync ready for correlation {correlation_id}")
+            else:
+                # Rhubarb failed - emit ready anyway so TTS doesn't wait forever
+                from src.core.event_bus import EventType, emit_event
+                await emit_event(
+                    EventType.LIP_SYNC_READY,
+                    {
+                        "correlation_id": correlation_id,
+                        "fallback": True  # Indicates text-based fallback will be used
+                    },
+                    source="animation_service",
+                    correlation_id=correlation_id
+                )
+        else:
+            # No audio file - store pending request
+            if correlation_id:
+                self._pending_requests[correlation_id] = text
+
+    async def _on_audio_playback_started(self, event) -> None:
+        """Handle audio playback started - start lip sync session using cached data."""
+        correlation_id = event.correlation_id
+        # Use the exact start timestamp from the audio thread for precise sync
+        start_timestamp = event.data.get("start_timestamp")
+
+        # Check for cached lip sync data (generated during TTS_STARTED)
+        if correlation_id and correlation_id in self._cached_lip_sync:
+            lip_sync_data = self._cached_lip_sync.pop(correlation_id)
+            await self._start_lip_sync_session(lip_sync_data, correlation_id, start_timestamp)
+            logger.info(f"Started lip sync session from cached data for {correlation_id}")
+        else:
+            # No cached data - Rhubarb failed or wasn't ready
+            # No fallback - just log it
+            logger.warning(f"No cached lip sync data for {correlation_id}, mouth will remain idle")
 
     async def _on_audio_playback_ended(self, event) -> None:
         """Handle audio playback ended - stop lip sync session."""
@@ -310,15 +337,28 @@ class AnimationService:
     async def _start_lip_sync_session(
         self,
         lip_sync_data: LipSyncData,
-        correlation_id: Optional[str]
+        correlation_id: Optional[str],
+        start_timestamp: Optional[float] = None
     ) -> None:
-        """Start a new lip sync playback session."""
+        """
+        Start a new lip sync playback session.
+
+        Args:
+            lip_sync_data: Pre-generated lip sync data from Rhubarb
+            correlation_id: Correlation ID for request tracing
+            start_timestamp: Exact timestamp when audio playback started.
+                           If provided, animation will sync to this time.
+        """
         session_id = f"lipsync_{time.time()}"
+
+        # Use the provided start_timestamp for precise sync with audio
+        # If not provided, fall back to current time
+        session_start_time = start_timestamp if start_timestamp else time.time()
 
         session = LipSyncSession(
             session_id=session_id,
             lip_sync_data=lip_sync_data,
-            start_time=time.time(),
+            start_time=session_start_time,
             correlation_id=correlation_id
         )
 
