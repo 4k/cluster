@@ -1,6 +1,16 @@
 """
 DisplayManager - Main interface for the multi-window emotion display system.
 Provides high-level API for managing display windows and connecting to the event bus.
+
+Enhanced with Rhubarb lip sync integration:
+- Direct Rhubarb viseme control with smooth interpolation
+- Coordinated switching between text-based and Rhubarb lip sync
+- Integration with RhubarbVisemeController for advanced features
+- Support for coarticulation and viseme lookahead
+
+Based on best practices from:
+- Rhubarb Lip Sync official documentation
+- Industry-standard animation techniques
 """
 
 import asyncio
@@ -15,6 +25,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from .settings import DisplaySettings, WindowSettings, ContentType, WindowType
 from .window_manager import WindowManager
 from .decision_module import DisplayDecisionModule, DisplayEvent
+from .rhubarb_controller import (
+    RhubarbVisemeController,
+    RhubarbControllerConfig,
+    RhubarbLipSyncIntegration
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +47,14 @@ class DisplayManager:
                     -> Renderer (eyes, mouth, etc.)
     """
 
-    def __init__(self, settings: Optional[DisplaySettings] = None):
+    def __init__(self, settings: Optional[DisplaySettings] = None,
+                 rhubarb_config: Optional[RhubarbControllerConfig] = None):
         """
-        Initialize the display manager.
+        Initialize the display manager with Rhubarb integration.
 
         Args:
             settings: Display settings (uses defaults if not provided)
+            rhubarb_config: Rhubarb controller configuration
         """
         self.settings = settings or DisplaySettings()
         self.window_manager = WindowManager(self.settings)
@@ -49,10 +66,24 @@ class DisplayManager:
         # State
         self.is_running = False
 
-        # Lip sync state - tracks if Rhubarb lip sync is controlling mouth
+        # Rhubarb lip sync integration
         self._rhubarb_lip_sync_active = False
+        self._rhubarb_session_id: Optional[str] = None
+        self._rhubarb_config = rhubarb_config or RhubarbControllerConfig()
 
-        logger.info("DisplayManager initialized")
+        # Initialize Rhubarb controller for direct viseme control
+        self._rhubarb_controller = RhubarbVisemeController(self._rhubarb_config)
+        self._rhubarb_controller.set_viseme_callback(self._on_rhubarb_viseme)
+
+        # Statistics for Rhubarb integration
+        self._rhubarb_stats = {
+            'sessions_started': 0,
+            'sessions_completed': 0,
+            'visemes_received': 0,
+            'fallback_used': 0
+        }
+
+        logger.info("DisplayManager initialized with Rhubarb integration")
 
     @property
     def decision_module(self) -> DisplayDecisionModule:
@@ -162,17 +193,66 @@ class DisplayManager:
         logger.debug(f"TTS started (rhubarb_active={self._rhubarb_lip_sync_active})")
 
     async def _on_lip_sync_started(self, event) -> None:
-        """Handle Rhubarb lip sync started - disable text-based lip sync."""
+        """Handle Rhubarb lip sync started - configure for Rhubarb control."""
         self._rhubarb_lip_sync_active = True
+        self._rhubarb_session_id = event.data.get('session_id')
+        self._rhubarb_stats['sessions_started'] += 1
+
         # Stop any text-based animation that might be running
         self.stop_speaking()
+
         # Set speaking state without text animation
         self.set_animation_state('SPEAKING')
-        logger.info(f"Rhubarb lip sync started: {event.data.get('cue_count', 0)} cues")
+
+        # Notify mouth renderer of Rhubarb session start
+        self.window_manager.decision_module.route_event(
+            DisplayEvent.SPEAK_START,
+            {'session_id': self._rhubarb_session_id, 'rhubarb': True}
+        )
+
+        # Load lip sync data into controller if provided
+        cues = event.data.get('cues', [])
+        duration = event.data.get('duration', 0.0)
+        if cues:
+            # Convert cues from animation_service format
+            formatted_cues = []
+            for cue in cues:
+                if hasattr(cue, 'viseme'):
+                    # VisemeCue object from RhubarbLipSyncService
+                    formatted_cues.append({
+                        'start': cue.start_time,
+                        'value': cue.viseme.value if hasattr(cue.viseme, 'value') else str(cue.viseme)
+                    })
+                elif isinstance(cue, dict):
+                    formatted_cues.append(cue)
+
+            if formatted_cues:
+                self._rhubarb_controller.load_lip_sync_data(
+                    formatted_cues,
+                    self._rhubarb_session_id or 'unknown',
+                    duration
+                )
+                self._rhubarb_controller.start_session()
+
+        logger.info(f"Rhubarb lip sync started: {event.data.get('cue_count', len(cues))} cues, "
+                   f"session={self._rhubarb_session_id}")
 
     async def _on_lip_sync_completed(self, event) -> None:
-        """Handle Rhubarb lip sync completed - re-enable text-based lip sync."""
+        """Handle Rhubarb lip sync completed - transition back to idle."""
         self._rhubarb_lip_sync_active = False
+        self._rhubarb_stats['sessions_completed'] += 1
+
+        # Stop Rhubarb controller session
+        if self._rhubarb_controller.is_active():
+            self._rhubarb_controller.stop_session()
+
+        # Notify mouth renderer
+        self.window_manager.decision_module.route_event(
+            DisplayEvent.SPEAK_STOP,
+            {'session_id': self._rhubarb_session_id, 'rhubarb': True}
+        )
+
+        self._rhubarb_session_id = None
         logger.debug("Rhubarb lip sync completed")
 
     async def _on_tts_completed(self, event) -> None:
@@ -205,9 +285,38 @@ class DisplayManager:
         self.set_gaze(x, y)
 
     async def _on_mouth_shape_update(self, event) -> None:
-        """Handle direct mouth shape update."""
+        """Handle direct mouth shape update from animation service or Rhubarb."""
         viseme = event.data.get('viseme', 'SILENCE')
-        self.set_viseme(viseme)
+        params = event.data.get('params')  # Optional detailed params from Rhubarb
+        source = event.data.get('source', 'unknown')
+
+        self._rhubarb_stats['visemes_received'] += 1
+
+        # Route viseme with optional parameters for enhanced animation
+        if params:
+            self.set_viseme_with_params(viseme, params)
+        else:
+            self.set_viseme(viseme)
+
+    def _on_rhubarb_viseme(self, viseme_name: str, mouth_params: Dict[str, float]) -> None:
+        """
+        Callback from RhubarbVisemeController for viseme updates.
+
+        This provides direct, high-fidelity control from the Rhubarb controller
+        with interpolated parameters for smooth animation.
+        """
+        if not self.is_running:
+            return
+
+        # Route to mouth renderer with detailed parameters
+        self.window_manager.decision_module.route_event(
+            DisplayEvent.VISEME_UPDATE,
+            {
+                'viseme': viseme_name,
+                'params': mouth_params,
+                'source': 'rhubarb_controller'
+            }
+        )
 
     async def _on_blink_triggered(self, event) -> None:
         """Handle blink trigger."""
@@ -296,9 +405,46 @@ class DisplayManager:
         Set mouth viseme directly.
 
         Args:
-            viseme: Viseme name (SILENCE, AH, EE, OH, etc.)
+            viseme: Viseme name (SILENCE, AH, EE, OH, etc.) or Rhubarb shape (A-X)
         """
         self.window_manager.set_viseme(viseme)
+
+    def set_viseme_with_params(self, viseme: str, params: Dict[str, float]) -> None:
+        """
+        Set mouth viseme with detailed parameters from Rhubarb controller.
+
+        This method provides enhanced control with interpolated parameters
+        for smoother animation with coarticulation support.
+
+        Args:
+            viseme: Viseme name or Rhubarb shape letter
+            params: Detailed mouth parameters (open, width, pucker, etc.)
+        """
+        self.window_manager.decision_module.route_event(
+            DisplayEvent.VISEME_UPDATE,
+            {
+                'viseme': viseme,
+                'params': params,
+                'source': 'display_manager'
+            }
+        )
+
+    def set_rhubarb_shape(self, shape: str, intensity: float = 1.0) -> None:
+        """
+        Set mouth to a specific Rhubarb shape.
+
+        Args:
+            shape: Rhubarb shape letter (A, B, C, D, E, F, G, H, X)
+            intensity: Viseme intensity (0-1)
+        """
+        self.window_manager.decision_module.route_event(
+            DisplayEvent.VISEME_UPDATE,
+            {
+                'viseme': shape,
+                'intensity': intensity,
+                'source': 'rhubarb_direct'
+            }
+        )
 
     # Window management
 
@@ -346,14 +492,43 @@ class DisplayManager:
     # Status and statistics
 
     def get_state(self) -> Dict[str, Any]:
-        """Get current state of the display manager."""
+        """Get current state of the display manager including Rhubarb status."""
         return {
             'is_running': self.is_running,
             'event_bus_connected': self._event_bus_connected,
             'rhubarb_lip_sync_active': self._rhubarb_lip_sync_active,
+            'rhubarb_session_id': self._rhubarb_session_id,
             'current_state': self.decision_module.get_current_state(),
-            'statistics': self.window_manager.get_statistics()
+            'statistics': self.window_manager.get_statistics(),
+            'rhubarb_stats': self._rhubarb_stats,
+            'rhubarb_controller_stats': self._rhubarb_controller.get_stats()
         }
+
+    def get_rhubarb_config(self) -> RhubarbControllerConfig:
+        """Get the current Rhubarb controller configuration."""
+        return self._rhubarb_config
+
+    def update_rhubarb_config(self, **kwargs) -> None:
+        """
+        Update Rhubarb controller configuration.
+
+        Args:
+            **kwargs: Configuration parameters to update
+                - lookahead_ms: Viseme lookahead in milliseconds
+                - transition_duration_ms: Transition time between visemes
+                - enable_coarticulation: Whether to blend adjacent visemes
+                - coarticulation_strength: Blend strength (0-1)
+                - intensity_scale: Overall mouth movement intensity
+        """
+        for key, value in kwargs.items():
+            if hasattr(self._rhubarb_config, key):
+                setattr(self._rhubarb_config, key, value)
+
+        # Recreate controller with new config
+        self._rhubarb_controller = RhubarbVisemeController(self._rhubarb_config)
+        self._rhubarb_controller.set_viseme_callback(self._on_rhubarb_viseme)
+
+        logger.info(f"Updated Rhubarb config: {kwargs}")
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get display statistics."""
