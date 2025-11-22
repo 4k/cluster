@@ -29,6 +29,9 @@ def main():
 
     # Setup renderer and controller
     renderer = MouthRenderer(800, 400)
+    # Create and set the rendering surface
+    render_surface = pygame.Surface((800, 400))
+    renderer.set_surface(render_surface)
     config = RhubarbControllerConfig(
         lookahead_ms=50.0,
         transition_duration_ms=60.0,
