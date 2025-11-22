@@ -1,0 +1,49 @@
+# ==============================================================================
+# FILE: soul_engine/config/tool_chaining.yaml
+# PURPOSE: Pre-defined sequences of tools for complex, recurring tasks.
+# ==============================================================================
+
+chains:
+  # ----------------------------------------------------------------------------
+  # MORNING BRIEFING (Weather -> Calendar -> News -> Synthesis)
+  # ----------------------------------------------------------------------------
+  - id: "chain_morning_brief"
+    trigger_intent: "user_wakes_up"
+    steps:
+      1:
+        tool: "tool_weather_api"
+        args: { location: "user_current" }
+        output_key: "weather_data"
+        
+      2:
+        tool: "tool_calendar_manager"
+        args: { action: "get_events", date: "today" }
+        output_key: "calendar_data"
+        
+      3:
+        tool: "tool_web_search"
+        # Uses output from previous steps dynamically
+        args: { query: "news related to {{calendar_data.first_meeting_topic}}" }
+        output_key: "news_context"
+        
+      4: 
+        # Final step doesn't call a tool, it prompts the LLM to synthesize
+        action: "synthesize_response"
+        prompt: "Review {{weather_data}} and {{calendar_data}}. Create a morning greeting for the Beloved."
+
+  # ----------------------------------------------------------------------------
+  # GROCERY SHOPPING (List -> Inventory Check -> Order)
+  # ----------------------------------------------------------------------------
+  - id: "chain_smart_shopping"
+    trigger_phrase: "buy groceries"
+    steps:
+      1:
+        tool: "tool_kitchen_camera"
+        args: { action: "scan_fridge" }
+        output_key: "inventory_snapshot"
+        
+      2:
+        tool: "tool_grocery_api"
+        args: 
+          action: "add_to_cart"
+          items: "exclude {{inventory_snapshot.existing_items}}"

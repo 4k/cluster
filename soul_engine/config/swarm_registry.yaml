@@ -1,0 +1,47 @@
+# ==============================================================================
+# FILE: soul_engine/config/swarm_registry.yaml
+# PURPOSE: Defines the "Roster" of active agents and their capabilities.
+# ==============================================================================
+
+agents:
+  # ----------------------------------------------------------------------------
+  # AGENT: 790 (The Soul)
+  # ----------------------------------------------------------------------------
+  - id: "soul_790"
+    type: "personality_core"
+    model: "gpt-4-turbo" # Needs high creativity
+    
+    permissions:
+      can_access_internet: true
+      can_execute_code: false # 790 is too chaotic for code execution
+      can_access_smarthome: "read_only" # Can see lights, cannot toggle them (without help)
+      
+    description_for_router: "The primary user interface. Handles all conversation, emotional support, and Lexx-related lore. Fails at math and logic."
+
+  # ----------------------------------------------------------------------------
+  # AGENT: JARVIS (The Worker)
+  # ----------------------------------------------------------------------------
+  - id: "agent_jarvis"
+    type: "utility_core"
+    model: "gpt-3.5-turbo" # Fast, deterministic
+    
+    permissions:
+      can_access_internet: true
+      can_execute_code: true # The "hands" of the system
+      can_access_smarthome: "read_write"
+      
+    description_for_router: "The backend logic engine. Handles calculation, coding, home automation APIs, and factual retrieval. No personality."
+
+  # ----------------------------------------------------------------------------
+  # AGENT: SAFETY_WATCHDOG (The Supervisor)
+  # ----------------------------------------------------------------------------
+  - id: "system_watchdog"
+    type: "supervisor"
+    model: "llama-3-70b-guard"
+    
+    role: "passive_monitor"
+    triggers:
+      - "harmful_content_detected"
+      - "system_integrity_threat"
+      
+    action: "override_and_shutdown"

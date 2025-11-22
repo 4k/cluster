@@ -1,0 +1,75 @@
+# ==============================================================================
+# FILE: soul_engine/config/planning_engine.yaml
+# PURPOSE: Executes the plan, manages state, handles errors, and allows backtracking.
+# ARCHITECTURE: Implements the "ReAct" (Reason + Act) loop with "Reflexion" (Self-Correction).
+# ==============================================================================
+
+planning_kernel:
+  max_steps: 10             # Prevent infinite loops
+  execution_timeout: 120s   # Hard stop for entire plan
+  
+  # ----------------------------------------------------------------------------
+  # EXECUTION LOOP (The "Agentic Loop")
+  # ----------------------------------------------------------------------------
+  # Research Note: We separate "Thought" (Planning) from "Action" (Tool use)
+  # to allow for "Hypothetical Reasoning" before committing.
+  stages:
+    1_perception: "Ingest subtask and previous step outputs."
+    2_deliberation: "Check if preconditions for the subtask are met."
+    3_hypothetical: "Simulate the action. (e.g., 'If I delete this file, can I undo it?')"
+    4_execution: "Call the tool."
+    5_observation: "Read tool output."
+    6_reflection: "Did it work? If no, trigger Backtracking."
+
+  # ----------------------------------------------------------------------------
+  # BACKTRACKING & ERROR RECOVERY
+  # ----------------------------------------------------------------------------
+  # Research Note: Plans fail. Robust agents need a "Stack" of states to revert to.
+  error_handling:
+    strategy: "tree_search_rollback" 
+    
+    scenarios:
+      # Case 1: Tool Error (e.g., API Down)
+      - trigger: "tool_failure"
+        max_retries: 3
+        backoff: "exponential"
+        fallback_action: "ask_user_for_help"
+        
+      # Case 2: Logic Error (e.g., Search returned 0 results)
+      - trigger: "empty_result"
+        action: "reformulate_query"
+        prompt_injection: "The previous search term '{{query}}' yielded nothing. Try a broader term."
+        
+      # Case 3: Constraint Violation (e.g., 790 refuses to help a male rival)
+      - trigger: "personality_refusal"
+        action: "skip_step_and_notify"
+        output_template: "I refuse to execute step '{{step_id}}' because {{reason}}. Proceeding to next step..."
+
+  # ----------------------------------------------------------------------------
+  # MEMORY SCAFFOLDING (Short-Term Context)
+  # ----------------------------------------------------------------------------
+  # The "Scratchpad" where the agent keeps track of intermediate variables.
+  scratchpad:
+    storage_key: "active_plan_context"
+    
+    # How to merge new info into the plan
+    context_merging_strategy: "append_recent" 
+    
+    # Example: If Step 1 finds a phone number, Step 2 (Call) must be able to see it.
+    variable_passing:
+      enabled: true
+      syntax: "{{step_id.output}}"
+
+  # ----------------------------------------------------------------------------
+  # HYPOTHETICAL REASONING (Simulation)
+  # ----------------------------------------------------------------------------
+  # Allows the bot to "think ahead" without taking action.
+  simulation_mode:
+    enabled_for_tags: ["financial", "destructive", "messaging"]
+    prompt: |
+      [SIMULATION]
+      Stop. You are about to execute: {{action}}.
+      Imagine the worst-case outcome.
+      1. Could this annoy the User?
+      2. Is this irreversible?
+      If YES, generate a 'confirmation_request' to the User instead of executing.

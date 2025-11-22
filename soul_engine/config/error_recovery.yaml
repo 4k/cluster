@@ -1,0 +1,41 @@
+# ==============================================================================
+# FILE: soul_engine/config/error_recovery.yaml
+# PURPOSE: Heuristics for handling tool failures without crashing.
+# ==============================================================================
+
+recovery_policies:
+  # ----------------------------------------------------------------------------
+  # API FAILURES (e.g., Server 500, Timeout)
+  # ----------------------------------------------------------------------------
+  - error_type: "NetworkError"
+    strategy: "exponential_backoff"
+    max_attempts: 3
+    fallback_action: "notify_user_offline_mode"
+
+  # ----------------------------------------------------------------------------
+  # LOGIC FAILURES (e.g., Searching for "Unobtainium")
+  # ----------------------------------------------------------------------------
+  - error_type: "EmptyResult"
+    strategy: "broaden_query"
+    action:
+      tool: "tool_web_search"
+      # Rewrite the query to be less specific
+      modification: "remove_adjectives" 
+
+  # ----------------------------------------------------------------------------
+  # PERMISSION DENIED (e.g., 790 tries to buy a chainsaw)
+  # ----------------------------------------------------------------------------
+  - error_type: "AuthorizationError"
+    strategy: "escalate_to_user"
+    response_template: |
+      "My hands are tied! The system refuses to let me execute {{tool_name}}. 
+      Please authorize this manually or command me to do something else."
+
+  # ----------------------------------------------------------------------------
+  # SELF-HEALING (Context Clearing)
+  # ----------------------------------------------------------------------------
+  # If the LLM gets stuck in a loop of failing tools
+  - error_type: "ConsecutiveFailures"
+    threshold: 3
+    action: "prune_context_window"
+    description: "Remove the last 5 turns of conversation to reset the LLM's confusion."

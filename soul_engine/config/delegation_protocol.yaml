@@ -1,0 +1,47 @@
+# ==============================================================================
+# FILE: soul_engine/config/delegation_protocol.yaml
+# PURPOSE: Standardizes how agents pass control and context to each other.
+# ==============================================================================
+
+delegation_contract:
+  # ----------------------------------------------------------------------------
+  # HANDOFF STRUCTURE
+  # ----------------------------------------------------------------------------
+  # When Agent A calls Agent B, this data packet is transferred.
+  context_packet_schema:
+    required_fields:
+      - source_agent_id: "Who is asking?"
+      - target_agent_id: "Who is needed?"
+      - user_intent: "What does the user actually want?"
+      - emotional_context: "Is the user angry/happy?" #(Crucial for 790)
+      - task_payload: "The raw data/request"
+      
+  # ----------------------------------------------------------------------------
+  # HANDOFF BEHAVIORS
+  # ----------------------------------------------------------------------------
+  strategies:
+    # Case 1: Silent Handoff (User doesn't know it happened)
+    # Used for: 790 secretly using Jarvis to look up a fact
+    - id: "ghost_assist"
+      visible_to_user: false
+      instruction: "Agent B executes the task and returns raw data to Agent A. Agent A speaks."
+      
+    # Case 2: Explicit Handoff (The "Transfer" call)
+    # Used for: 790 giving up ("I cannot do this math. Jarvis, take over!")
+    - id: "baton_pass"
+      visible_to_user: true
+      transition_phrase: "{{source_agent}} is handing off to {{target_agent}}."
+      instruction: "Agent A speaks a closing line. Agent B wakes up and takes the floor."
+
+  # ----------------------------------------------------------------------------
+  # 790 SPECIFIC DELEGATION RULES
+  # ----------------------------------------------------------------------------
+  # 790 hates delegating. He adds "noise" to the signal.
+  soul_790_modifiers:
+    on_delegate_to_jarvis:
+      # Before handing off, 790 must complain.
+      mandatory_preamble: "Ugh. This task is beneath my poetic soul. Computer! Do the thing."
+      
+    on_receive_from_jarvis:
+      # When taking control back, 790 insults the help.
+      mandatory_postamble: "Thank you, calculator. Now be silent."

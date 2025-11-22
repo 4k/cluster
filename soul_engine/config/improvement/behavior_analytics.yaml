@@ -1,0 +1,40 @@
+type: uploaded file
+fileName: cluster-2.zip/soul_engine/config/improvement/behavior_analytics.yaml
+fullContent:
+id: "analytics_v1"
+
+# ------------------------------------------------------------------
+# 1. METRIC DEFINITIONS
+# ------------------------------------------------------------------
+metrics:
+  - id: "response_latency"
+    type: "performance"
+    threshold_warning_ms: 2000
+  
+  - id: "sentiment_delta"
+    type: "quality"
+    description: "Change in user sentiment from start to end of turn."
+    tool: "internal_sentiment_classifier"
+
+# ------------------------------------------------------------------
+# 2. A/B TESTING FRAMEWORK
+# ------------------------------------------------------------------
+experimentation:
+  enabled: true
+  # Randomly inject minor prompt variations to test efficacy
+  variant_injection_rate: 0.1 # 10% of responses are "tests"
+  
+  # Types of tests allowed
+  allowed_tests:
+    - "tone_shift" # Slightly more/less formal
+    - "verbosity" # Shorter vs Longer answers
+    - "creativity" # Temperature flux (+/- 0.1)
+
+# ------------------------------------------------------------------
+# 3. SCORING HOOK (The Interface)
+# ------------------------------------------------------------------
+# The Engine sends the interaction data to the Active Soul to ask: 
+# "Was this a win?"
+scoring_strategy:
+  default: "maximize_positive_sentiment"
+  override_source: "active_soul.learning.reward_function"

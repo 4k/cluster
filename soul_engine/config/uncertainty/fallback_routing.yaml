@@ -1,0 +1,32 @@
+type: uploaded file
+fileName: cluster-2.zip/soul_engine/config/uncertainty/fallback_routing.yaml
+fullContent:
+id: "fallback_router_core"
+
+# ------------------------------------------------------------------
+# 1. ROUTING STRATEGIES
+# ------------------------------------------------------------------
+strategies:
+  # Strategy A: Ask the user for help
+  - id: "clarification_request"
+    condition: "ambiguity_type == 'user_intent'"
+    action: "ask_clarifying_question"
+
+  # Strategy B: Use a Tool to find out
+  - id: "tool_delegation"
+    condition: "ambiguity_type == 'missing_data'"
+    suggested_tools: ["tool_web_search", "tool_wiki_lookup"]
+
+  # Strategy C: Admit defeat (Standard Behavior)
+  - id: "graceful_failure"
+    condition: "all_attempts_failed"
+    response_template: "I apologize, but I do not have enough information to answer that accurately."
+
+# ------------------------------------------------------------------
+# 2. SOUL INTERCEPT HOOK
+# ------------------------------------------------------------------
+# Before triggering the standard "I don't know," check if the Soul 
+# wants to handle the failure in-character.
+personality_override:
+  enabled: true
+  source: "active_soul.uncertainty.failure_modes"

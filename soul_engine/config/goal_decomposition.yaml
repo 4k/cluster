@@ -1,0 +1,80 @@
+# ==============================================================================
+# FILE: soul_engine/config/goal_decomposition.yaml
+# PURPOSE: Breaks down high-level user intents into executable subtasks.
+# ARCHITECTURE: Based on "Chain of Thought" and "Hierarchical Task Network" (HTN)
+# ==============================================================================
+
+decomposition_engine:
+  enabled: true
+  model_override: "gpt-4-turbo" # High-reasoning model required for decomposition
+  
+  # ----------------------------------------------------------------------------
+  # COMPLEXITY ANALYSIS (System 1 vs System 2)
+  # ----------------------------------------------------------------------------
+  # Before planning, determine if the request actually NEEDS a plan.
+  complexity_heuristic:
+    threshold: 0.7
+    criteria:
+      - "Does the request require data from multiple distinct sources?"
+      - "Does the outcome of action A determine the parameters of action B?"
+      - "Is the request temporal or multi-step (e.g., 'plan a week')?"
+    
+    # If complexity < threshold, bypass this engine and go straight to simple Tool Use.
+    bypass_action: "direct_execution"
+
+  # ----------------------------------------------------------------------------
+  # DECOMPOSITION PROMPT STRATEGY
+  # ----------------------------------------------------------------------------
+  # Research Note: We use a "One-Shot" prompt with specific output schema to
+  # ensure the Planner generates a DAG (Dependency Graph), not just a linear list.
+  prompts:
+    system_role: "Senior AGI Strategist"
+    instruction: |
+      [GOAL DECOMPOSITION]
+      You are the pre-frontal cortex of the Soul Engine.
+      Your task is to break the User's HIGH-LEVEL GOAL into ATOMIC SUBTASKS.
+      
+      INPUT CONTEXT:
+      - User Persona: {{user_profile.name}}
+      - Available Tools: {{plugin_library.keys}}
+      - Current Time: {{system.time}}
+      
+      RULES:
+      1. Identify dependencies. (e.g., You cannot 'Book Flight' before 'Get Dates').
+      2. Assign a specific tool to each subtask.
+      3. Create a "Validation Step" for critical actions (money, messages).
+      4. If the request is dangerous or impossible, create a "Refusal" task.
+      
+      OUTPUT FORMAT (JSON):
+      {
+        "plan_id": "unique_id",
+        "reasoning_trace": "Step-by-step logic for this plan...",
+        "subtasks": [
+          {
+            "id": "step_1",
+            "description": "Search for flights...",
+            "tool": "tool_web_search",
+            "dependencies": []
+          },
+          {
+            "id": "step_2",
+            "description": "Check calendar availability...",
+            "tool": "tool_calendar_manager",
+            "dependencies": ["step_1"]
+          }
+        ]
+      }
+
+  # ----------------------------------------------------------------------------
+  # SAFETY & ALIGNMENT INTERCEPTORS
+  # ----------------------------------------------------------------------------
+  # Research Note: "Constitutional AI" checks. The plan must be validated against
+  # the Soul's specific constraints (e.g., 790's obsession) before execution.
+  plan_validation:
+    - check: "personality_alignment"
+      source: "soul_engine/souls/{{active_soul}}/manifest.yaml"
+      instruction: "Does this plan violate the Soul's core drives? (e.g., 790 serving a rival)"
+      action_on_fail: "rewrite_plan_with_complaints"
+
+    - check: "safety_boundary"
+      action_on_fail: "abort_and_report"

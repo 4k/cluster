@@ -1,0 +1,47 @@
+id: "stream_manager_v1"
+
+# ------------------------------------------------------------------
+# 1. TOKEN FLOW & LATENCY OPTIMIZATION
+# ------------------------------------------------------------------
+transport:
+  protocol: "websocket" # Bidirectional required for interruptions
+  heartbeat_ms: 5000
+
+buffering_strategy:
+  # Best Practice: Don't send raw tokens to TTS; send "semantic chunks"
+  # to prevent robotic cadence.
+  mode: "sentence_boundary" 
+  
+  # If a sentence is too long, force a flush after this many tokens
+  # to prevent audio lag.
+  max_buffer_tokens: 30 
+  
+  # Discard "thinking" tokens (Chain of Thought) before streaming
+  filter_patterns: 
+    - "<thinking>.*?</thinking>" 
+    - "^\\s*$" # Empty whitespace
+
+# ------------------------------------------------------------------
+# 2. INTERRUPTION (BARGE-IN) POLICY
+# ------------------------------------------------------------------
+# What happens when the user speaks while the bot is outputting?
+interruption_logic:
+  enabled: true
+  sensitivity: "high" # Detects voice activity immediately
+  
+  actions_on_detect:
+    - "halt_llm_generation" # Stop wasting compute
+    - "clear_audio_buffer"  # Stop TTS immediately
+    - "flush_ui_queue"      # Remove pending text blocks
+    - "trigger_interruption_event" # Notify the Soul logic
+
+# ------------------------------------------------------------------
+# 3. TIMEOUTS & WATCHDOGS
+# ------------------------------------------------------------------
+performance_monitors:
+  # "Time to First Token" - If the LLM hangs, do something.
+  ttft_threshold_ms: 2000
+  
+  on_slow_start:
+    action: "emit_filler_audio" # e.g., "Hmm...", "Let's see..."
+    # This creates the illusion of instant response.

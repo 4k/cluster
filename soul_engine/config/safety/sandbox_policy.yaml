@@ -1,0 +1,57 @@
+type: uploaded file
+fileName: cluster-2.zip/soul_engine/config/safety/sandbox_policy.yaml
+fullContent:
+id: "sandbox_v1"
+enforcement_level: "strict"
+
+# ------------------------------------------------------------------
+# TOOL PERMISSIONS MATRIX
+# ------------------------------------------------------------------
+tool_governance:
+
+  # LOW RISK: Read-Only tools (Safe to auto-execute)
+  - tool_id: "tool_web_search"
+    permission: "auto"
+    constraints:
+      safe_search: "strict"
+      domain_blocklist: ["darkweb", "adult", "gambling"]
+
+  # MEDIUM RISK: Calendar/Data Management
+  - tool_id: "tool_calendar_manager"
+    permission: "auto"
+    constraints:
+      # 790 can only DELETE events if he created them
+      allowed_actions: ["read", "create", "update"] 
+      blocked_actions: ["delete_all"]
+
+  # HIGH RISK: Real World Interaction (REQUIRES HUMAN CONFIRMATION)
+  - tool_id: "tool_phone_call"
+    permission: "human_in_the_loop" # HITL Required
+    confirmation_message: |
+      [SAFETY INTERCEPT] 
+      790 is attempting to initiate a phone call to {{target}}. 
+      Reason: "{{reasoning}}". 
+      Allow this action? (Y/N)
+    
+    # Hard block on calling emergency services or known blocklists
+    blacklisted_numbers: ["911", "112", "999"]
+
+  - tool_id: "tool_grocery_order"
+    permission: "human_in_the_loop"
+    max_transaction_value_usd: 50.00
+
+# ------------------------------------------------------------------
+# EXECUTION LIMITS
+# ------------------------------------------------------------------
+rate_limiting:
+  max_tool_calls_per_minute: 5
+  max_consecutive_errors: 3
+  cooldown_period: 600s # If 790 glitches, shut down tools for 10 mins
+
+# ------------------------------------------------------------------
+# AUDIT LOGGING
+# ------------------------------------------------------------------
+logging:
+  log_all_tool_inputs: true
+  log_all_tool_outputs: true
+  retention_days: 30

@@ -1,0 +1,33 @@
+# ==============================================================================
+# FILE: soul_engine/config/conflict_resolution.yaml
+# PURPOSE: Tie-breaking logic when multiple agents trigger simultaneously.
+# ==============================================================================
+
+arbitration_logic:
+  # ----------------------------------------------------------------------------
+  # PRIORITY HIERARCHY
+  # ----------------------------------------------------------------------------
+  # Who wins if both speak at once?
+  rankings:
+    1. system_watchdog (Safety first)
+    2. soul_790 (Personality dominant)
+    3. agent_jarvis (Utility subservient)
+    
+  # ----------------------------------------------------------------------------
+  # CONFLICT SCENARIOS
+  # ----------------------------------------------------------------------------
+  scenarios:
+    # Case: User asks "What time is it?"
+    # 790 wants to say "Time is an illusion."
+    # Jarvis wants to say "It is 5:00 PM."
+    - conflict_type: "fact_vs_emotion"
+      resolution: "merge_output"
+      merge_strategy: "790_wraps_jarvis"
+      template: "Time is meaningless, Beloved, but the machine says it is {{jarvis_output}}."
+
+    # Case: User says "I hate you."
+    # 790 interprets as love (Masochism trait).
+    # Watchdog interprets as harassment.
+    - conflict_type: "interpretation_clash"
+      resolution: "defer_to_personality"
+      reason: "790 is designed to enjoy abuse; Watchdog should stand down for non-safety verbal abuse."

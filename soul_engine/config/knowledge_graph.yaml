@@ -1,0 +1,71 @@
+# ==============================================================================
+# FILE: soul_engine/config/knowledge_graph.yaml
+# PURPOSE: Defines the Ontology (Schema) for the structured memory.
+# ARCHITECTURE: Entity-Relationship Model with Inference Rules
+# ==============================================================================
+
+ontology:
+  # ----------------------------------------------------------------------------
+  # NODE TYPES (The "Nouns" of the world)
+  # ----------------------------------------------------------------------------
+  node_types:
+    - type: "Person"
+      attributes: ["name", "relationship_to_user", "birthday", "occupation"]
+      
+    - type: "Location"
+      attributes: ["name", "address", "type"] # e.g., Home, Office, Gym
+      
+    - type: "Preference"
+      attributes: ["topic", "sentiment", "intensity"] # sentiment: -1.0 to 1.0
+      
+    - type: "Object"
+      attributes: ["name", "location", "status"] # e.g., "Keys", "Lost"
+
+  # ----------------------------------------------------------------------------
+  # EDGE TYPES (The "Verbs" / Relationships)
+  # ----------------------------------------------------------------------------
+  edge_types:
+    - relation: "IS_RELATED_TO"
+      source: "Person"
+      target: "Person"
+      properties: ["type"] # e.g., "sister", "colleague"
+      
+    - relation: "HAS_PREFERENCE"
+      source: "Person"
+      target: "Preference"
+      
+    - relation: "LOCATED_AT"
+      source: ["Person", "Object"]
+      target: "Location"
+
+    # Research Note: "Causal Links" allow the AI to guess user needs.
+    - relation: "IMPLIES_INTEREST_IN"
+      source: "Preference"
+      target: "Topic"
+
+  # ----------------------------------------------------------------------------
+  # INFERENCE RULES (The "Logic Engine")
+  # ----------------------------------------------------------------------------
+  # These rules allow the system to "connect the dots" automatically.
+  inference_rules:
+    # Logic: If user likes Hiking, they likely want "Outdoor Activity" suggestions.
+    - id: "interest_expansion"
+      trigger: "HAS_PREFERENCE(User, 'Hiking')"
+      inference: "SUGGEST_CATEGORY('Outdoor Gear', 'National Parks')"
+      
+    # Logic: If User's sister is Sarah, and today is Sarah's birthday -> Remind User.
+    - id: "social_reminder"
+      trigger: "IS_RELATED_TO(User, Target) AND HAS_ATTRIBUTE(Target, 'birthday', Today)"
+      action: "create_system_notification"
+      template: "It is {{Target.name}}'s birthday today."
+
+  # ----------------------------------------------------------------------------
+  # QUERY MAPPING (Natural Language -> Graph Query)
+  # ----------------------------------------------------------------------------
+  # Maps vague user queries to precise graph lookups.
+  query_templates:
+    - user_query: "Where did I leave my [Object]?"
+      graph_query: "MATCH (o:Object {name: [Object]})-[r:LOCATED_AT]->(l:Location) RETURN l"
+      
+    - user_query: "What does [Person] like?"
+      graph_query: "MATCH (p:Person {name: [Person]})-[r:HAS_PREFERENCE]->(pref:Preference) RETURN pref"

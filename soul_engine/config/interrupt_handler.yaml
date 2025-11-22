@@ -1,0 +1,53 @@
+# ==============================================================================
+# FILE: soul_engine/config/interrupt_handler.yaml
+# PURPOSE: Low-latency handling of user voice interrupting the bot.
+# ==============================================================================
+
+barge_in_engine:
+  enabled: true
+  backend: "vad_webrtc" # Voice Activity Detection
+  
+  # ----------------------------------------------------------------------------
+  # SENSITIVITY SETTINGS
+  # ----------------------------------------------------------------------------
+  detection:
+    # Minimum speech duration to trigger an interrupt (prevents triggering on coughs)
+    min_speech_duration_ms: 300 
+    
+    # Volume threshold relative to background noise
+    energy_threshold: 0.6
+    
+    # "Lock-out" period after bot starts speaking where it ignores input (anti-echo)
+    initial_lockout_ms: 200 
+
+  # ----------------------------------------------------------------------------
+  # HANDLING LOGIC
+  # ----------------------------------------------------------------------------
+  on_interrupt_detected:
+    # 1. STOP Audio
+    action_audio: "fade_out_50ms"
+    
+    # 2. STOP Brain
+    action_llm: "cancel_stream"
+    
+    # 3. ANALYZE Intent of interruption
+    # Was it "Stop!" or just "Uh huh" (Backchanneling)?
+    action_analysis: 
+      use_fast_model: true
+      model: "groq-llama3-8b" # Ultra-low latency check
+      prompt: "User said: '{{transcription}}'. Is this an interruption or agreement? Output: INT or AGR"
+      
+    conditional_logic:
+      - if: "AGR" # User said "Yeah", "Uh-huh"
+        action: "resume_speech" # False alarm, keep talking
+        
+      - if: "INT" # User said "Wait, no!"
+        action: "process_new_input"
+
+  # ----------------------------------------------------------------------------
+  # CONTEXT REPAIR
+  # ----------------------------------------------------------------------------
+  # When interrupted, the bot needs to know what it *didn't* finish saying.
+  memory_patching:
+    strategy: "log_partial_utterance"
+    format: "Assistant was saying: '{{spoken_text}}...' [INTERRUPTED BY USER]"
