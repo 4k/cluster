@@ -21,6 +21,7 @@ import pyaudio
 
 # Event bus imports
 from src.core.event_bus import EventBus, EventType, emit_event
+from src.core.service_config import TTSServiceConfig
 
 logger = logging.getLogger(__name__)
 
@@ -28,16 +29,33 @@ logger = logging.getLogger(__name__)
 class TTSService:
     """Text-to-Speech service using Piper-TTS for high-quality voice synthesis. Event-driven with async queuing."""
 
-    def __init__(self, model_path=None, keep_audio_files: bool = True):
+    def __init__(
+        self,
+        model_path: str = None,
+        keep_audio_files: bool = None,
+        config: TTSServiceConfig = None
+    ):
         """
         Initialize the TTS service.
 
         Args:
-            model_path: Path to Piper voice model (.onnx file)
-            keep_audio_files: If True, save audio files for lip sync processing
+            model_path: Path to Piper voice model (.onnx file) (default: from config)
+            keep_audio_files: If True, save audio files for lip sync processing (default: from config)
+            config: TTSServiceConfig instance (default: loaded from config/tts.yaml)
         """
-        self.model_path = model_path or self._get_default_model()
-        self.keep_audio_files = keep_audio_files
+        # Load configuration from file if not provided
+        if config is None:
+            config = TTSServiceConfig.load()
+
+        # Use provided values or fall back to config
+        self._config = config
+        self.model_path = model_path or config.model_path or self._get_default_model(config)
+        self.keep_audio_files = keep_audio_files if keep_audio_files is not None else config.keep_audio_files
+
+        # Store additional config values
+        self._max_audio_files = config.max_audio_files
+        self._audio_chunk_size = config.audio_chunk_size
+        self._frames_per_buffer = config.frames_per_buffer
 
         # Initialize Piper voice
         logger.info(f"Loading Piper voice model: {self.model_path}")
@@ -59,12 +77,14 @@ class TTSService:
         self.is_running = False
 
         # Audio file directory for lip sync
-        self.audio_dir = Path(tempfile.gettempdir()) / "cluster_tts_audio"
+        if config.audio_output_dir:
+            self.audio_dir = Path(config.audio_output_dir)
+        else:
+            self.audio_dir = Path(tempfile.gettempdir()) / "cluster_tts_audio"
         self.audio_dir.mkdir(parents=True, exist_ok=True)
 
         # Track audio files for cleanup
         self._audio_files: list = []
-        self._max_audio_files = 10  # Keep last N files
 
     async def initialize(self):
         """Initialize event bus connection and subscribe to events."""
@@ -280,14 +300,13 @@ class TTSService:
                     channels=channels,
                     rate=framerate,
                     output=True,
-                    frames_per_buffer=1024
+                    frames_per_buffer=self._frames_per_buffer
                 )
 
                 audio_data = wav_reader.readframes(wav_reader.getnframes())
 
-                chunk_size = 4096
-                for i in range(0, len(audio_data), chunk_size):
-                    chunk = audio_data[i:i+chunk_size]
+                for i in range(0, len(audio_data), self._audio_chunk_size):
+                    chunk = audio_data[i:i+self._audio_chunk_size]
                     stream.write(chunk)
 
                 stream.stop_stream()
@@ -300,10 +319,14 @@ class TTSService:
             logger.error(f"Failed to play audio file: {e}")
             return False
 
-    def _get_default_model(self):
+    def _get_default_model(self, config: TTSServiceConfig = None):
         """Get default model path or provide download instructions."""
-        # Default model directory
-        models_dir = Path.home() / ".local" / "share" / "piper" / "voices"
+        # Use config's model_search_dir if available
+        if config and config.model_search_dir:
+            models_dir = Path(config.model_search_dir).expanduser()
+        else:
+            models_dir = Path.home() / ".local" / "share" / "piper" / "voices"
+
         models_dir.mkdir(parents=True, exist_ok=True)
 
         # Look for any existing .onnx model
@@ -316,11 +339,11 @@ class TTSService:
         logger.warning("No Piper voice model found.")
         logger.info(f"Please download a model to: {models_dir}")
         logger.info("Download models from: https://huggingface.co/rhasspy/piper-voices")
-        logger.info("Or run: python download_voice.py")
+        logger.info("Or set model_path in config/tts.yaml")
 
         raise FileNotFoundError(
             f"No Piper voice model found in {models_dir}. "
-            f"Please run 'python download_voice.py' to download a voice model."
+            f"Please set model_path in config/tts.yaml or download a voice model."
         )
 
     def speak(self, text):
@@ -427,16 +450,15 @@ class TTSService:
                     channels=channels,
                     rate=framerate,
                     output=True,
-                    frames_per_buffer=1024
+                    frames_per_buffer=self._frames_per_buffer
                 )
 
                 # Read all audio data
                 audio_data = wav_reader.readframes(wav_reader.getnframes())
 
                 # Play audio in chunks to avoid buffer issues
-                chunk_size = 4096
-                for i in range(0, len(audio_data), chunk_size):
-                    chunk = audio_data[i:i+chunk_size]
+                for i in range(0, len(audio_data), self._audio_chunk_size):
+                    chunk = audio_data[i:i+self._audio_chunk_size]
                     stream.write(chunk)
 
                 # Clean up stream

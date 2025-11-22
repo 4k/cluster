@@ -1,0 +1,36 @@
+# Text-to-Speech Service Configuration
+# =====================================
+# This file configures the Piper TTS service for speech synthesis.
+#
+# Environment variable overrides use the prefix TTS_
+# Example: TTS_MODEL_PATH=/path/to/voice.onnx, TTS_KEEP_AUDIO_FILES=false
+
+# Model Settings
+# --------------
+# Path to the Piper voice model (.onnx file)
+# If null, will search in model_search_dir for available models
+model_path: null
+
+# Directory to search for voice models
+model_search_dir: "~/.local/share/piper/voices"
+
+# Audio File Settings
+# -------------------
+# Keep generated audio files (required for lip sync feature)
+keep_audio_files: true
+
+# Maximum number of audio files to retain (older files are deleted)
+max_audio_files: 10
+
+# Audio Processing
+# ----------------
+# Chunk size for audio playback (bytes)
+audio_chunk_size: 4096
+
+# Frames per buffer for PyAudio stream
+frames_per_buffer: 1024
+
+# Output Settings
+# ---------------
+# Directory for temporary audio files (null = system temp directory)
+audio_output_dir: null

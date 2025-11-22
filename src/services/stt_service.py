@@ -17,6 +17,7 @@ from openwakeword.model import Model
 
 # Event bus imports
 from src.core.event_bus import EventBus, EventType, emit_event
+from src.core.service_config import STTServiceConfig
 
 logger = logging.getLogger(__name__)
 
@@ -46,26 +47,49 @@ def list_audio_devices():
 class STTService:
     """Speech-to-Text service with wake word detection. Event-driven with async support."""
 
-    def __init__(self, wake_word="computer", chunk_size=1280, sample_rate=16000, threshold=0.5, device_index=None, verbose=False, vosk_model_path=None):
+    def __init__(
+        self,
+        wake_word: str = None,
+        chunk_size: int = None,
+        sample_rate: int = None,
+        threshold: float = None,
+        device_index: int = None,
+        verbose: bool = None,
+        vosk_model_path: str = None,
+        config: STTServiceConfig = None
+    ):
         """
         Initialize the STT service.
 
         Args:
-            wake_word: Wake word to detect (default: "computer")
-            chunk_size: Audio chunk size in frames (default: 1280 for 80ms at 16kHz)
-            sample_rate: Audio sample rate in Hz (default: 16000)
-            threshold: Detection threshold 0.0-1.0 (default: 0.5)
-            device_index: Audio input device index (default: None = system default)
-            verbose: Show detection scores in real-time (default: False)
-            vosk_model_path: Path to Vosk model directory (default: None = auto-detect)
+            wake_word: Wake word to detect (default: from config)
+            chunk_size: Audio chunk size in frames (default: from config)
+            sample_rate: Audio sample rate in Hz (default: from config)
+            threshold: Detection threshold 0.0-1.0 (default: from config)
+            device_index: Audio input device index (default: from config)
+            verbose: Show detection scores in real-time (default: from config)
+            vosk_model_path: Path to Vosk model directory (default: from config)
+            config: STTServiceConfig instance (default: loaded from config/stt.yaml)
         """
-        self.wake_word = wake_word.lower()
-        self.chunk_size = chunk_size
-        self.sample_rate = sample_rate
-        self.threshold = threshold
-        self.device_index = device_index
-        self.verbose = verbose
-        self.vosk_model_path = vosk_model_path
+        # Load configuration from file if not provided
+        if config is None:
+            config = STTServiceConfig.load()
+
+        # Use provided values or fall back to config
+        self.wake_word = (wake_word or config.wake_word).lower()
+        self.chunk_size = chunk_size if chunk_size is not None else config.chunk_size
+        self.sample_rate = sample_rate if sample_rate is not None else config.sample_rate
+        self.threshold = threshold if threshold is not None else config.threshold
+        self.device_index = device_index if device_index is not None else config.device_index
+        self.verbose = verbose if verbose is not None else config.verbose
+        self.vosk_model_path = vosk_model_path or config.vosk_model_path
+
+        # Store additional config values
+        self._config = config
+        self.silence_threshold_rms = config.silence_threshold_rms
+        self.max_recording_seconds = config.max_recording_seconds
+        self.silence_duration_seconds = config.silence_duration_seconds
+
         self.is_running = False
         self.event_bus = None
         self._loop = None  # Will be set in initialize() for async event emission
@@ -83,25 +107,18 @@ class STTService:
         # Initialize Vosk speech recognition
         logger.info(f"Loading Vosk model...")
         try:
-            if vosk_model_path:
-                logger.info(f"Using specified model path: {vosk_model_path}")
-                self.vosk_model = VoskModel(vosk_model_path)
+            if self.vosk_model_path:
+                logger.info(f"Using specified model path: {self.vosk_model_path}")
+                self.vosk_model = VoskModel(self.vosk_model_path)
             else:
-                # Try to find model in common locations
+                # Try to find model in configured search paths
                 import os
                 import glob
 
-                possible_paths = [
-                    # Check models/vosk directory first
-                    "models/vosk/vosk-model-small-en-us-0.15",
-                    "models/vosk/vosk-model-en-us-0.22",
-                    # Also check direct subdirectories in models/vosk
-                    *glob.glob("models/vosk/vosk-model-*"),
-                    # Other common locations
-                    "models/vosk-model-small-en-us-0.15",
-                    "vosk-model-small-en-us-0.15",
-                    os.path.expanduser("~/.cache/vosk/vosk-model-small-en-us-0.15"),
-                ]
+                # Use search paths from config, plus glob patterns
+                possible_paths = list(config.vosk_model_search_paths)
+                possible_paths.extend(glob.glob("models/vosk/vosk-model-*"))
+                possible_paths.append(os.path.expanduser("~/.cache/vosk/vosk-model-small-en-us-0.15"))
 
                 found = False
                 for path in possible_paths:
@@ -117,7 +134,7 @@ class STTService:
                         "https://alphacephei.com/vosk/models\n"
                         "Example: vosk-model-small-en-us-0.15\n"
                         "Extract it to: models/vosk/vosk-model-small-en-us-0.15\n"
-                        "Or pass the path with --vosk-model argument"
+                        "Or set vosk_model_path in config/stt.yaml"
                     )
 
             logger.info(f"Vosk model loaded successfully")
@@ -249,10 +266,10 @@ class STTService:
             recognizer = KaldiRecognizer(self.vosk_model, actual_rate)
             recognizer.SetWords(True)
 
-            # Record for 5 seconds or until silence
-            max_frames = int(actual_rate / chunk_size * 5)  # 5 seconds max
+            # Record until max duration or silence (using config values)
+            max_frames = int(actual_rate / chunk_size * self.max_recording_seconds)
             silent_chunks = 0
-            max_silent_chunks = int(actual_rate / chunk_size * 1.5)  # 1.5 seconds of silence
+            max_silent_chunks = int(actual_rate / chunk_size * self.silence_duration_seconds)
             final_text = ""
 
             for i in range(max_frames):
@@ -267,7 +284,7 @@ class STTService:
                 # Check for silence (voice activity detection)
                 audio_array = np.frombuffer(data, dtype=np.int16)
                 rms = np.sqrt(np.mean(audio_array.astype(np.float32) ** 2))
-                if rms < 500:  # Silence threshold
+                if rms < self.silence_threshold_rms:  # Silence threshold from config
                     silent_chunks += 1
                     if silent_chunks > max_silent_chunks and final_text:
                         # Emit silence detected event

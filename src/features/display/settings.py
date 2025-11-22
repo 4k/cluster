@@ -6,6 +6,11 @@ Defines window sizes, positions, content subscriptions, and rendering parameters
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Any, Optional, Tuple
+import logging
+
+from src.core.service_config import load_display_config
+
+logger = logging.getLogger(__name__)
 
 
 class ContentType(Enum):
@@ -329,3 +334,24 @@ class DisplaySettings:
             show_debug_info=data.get('show_debug_info', False),
             log_events=data.get('log_events', False)
         )
+
+    @classmethod
+    def load(cls) -> 'DisplaySettings':
+        """
+        Load display settings from config/display.yaml.
+
+        Returns:
+            DisplaySettings instance with values from config file,
+            or defaults if file not found.
+        """
+        try:
+            config_data = load_display_config()
+            if config_data:
+                logger.info("Loaded display settings from config/display.yaml")
+                return cls.from_dict(config_data)
+            else:
+                logger.info("No display config found, using defaults")
+                return cls()
+        except Exception as e:
+            logger.warning(f"Error loading display config: {e}, using defaults")
+            return cls()

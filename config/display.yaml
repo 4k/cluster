@@ -1,0 +1,111 @@
+# Display Feature Configuration
+# ==============================
+# This file configures the multi-window emotion display system,
+# including eye/mouth rendering and Rhubarb lip sync settings.
+#
+# Environment variable overrides use the prefix DISPLAY_
+# Example: DISPLAY_TARGET_FPS=30, DISPLAY_SHOW_FPS=true
+
+# Window Configurations
+# ---------------------
+windows:
+  eyes:
+    window_type: "eye_window"
+    title: "Emotion Display - Eyes"
+    width: 800
+    height: 400
+    position_x: 100
+    position_y: 100
+    fps: 60
+    background_color: [20, 20, 25]
+    subscriptions: ["eyes"]
+    enabled: true
+    always_on_top: false
+    borderless: false
+
+  mouth:
+    window_type: "mouth_window"
+    title: "Emotion Display - Mouth"
+    width: 800
+    height: 300
+    position_x: 100
+    position_y: 550
+    fps: 60
+    background_color: [20, 20, 25]
+    subscriptions: ["mouth"]
+    enabled: true
+    always_on_top: false
+    borderless: false
+
+# Renderer Settings
+# -----------------
+renderer:
+  # Eye appearance
+  eye_iris_color: [100, 150, 200]
+  eye_pupil_color: [20, 20, 30]
+  eye_sclera_color: [240, 240, 245]
+
+  # Eye animation
+  eye_blink_duration: 0.15
+  eye_blink_interval_min: 2.0
+  eye_blink_interval_max: 6.0
+  eye_gaze_smoothing: 0.1
+  eye_max_gaze_offset: 0.3
+
+  # Mouth appearance
+  mouth_lip_color: [180, 100, 100]
+  mouth_interior_color: [60, 30, 40]
+  mouth_teeth_color: [240, 240, 235]
+
+  # Mouth animation
+  mouth_transition_speed: 12.0
+  mouth_idle_movement: true
+  rhubarb_transition_speed: 18.0
+  enable_coarticulation: true
+
+  # General animation
+  animation_smoothing: 0.15
+  emotion_transition_speed: 2.0
+
+# Rhubarb Lip Sync Settings
+# -------------------------
+rhubarb:
+  # Timing adjustments
+  lookahead_ms: 50.0        # Show visemes slightly early for natural look
+  hold_minimum_ms: 40.0     # Minimum viseme hold time
+
+  # Interpolation
+  transition_duration_ms: 60.0
+  easing_function: "ease_in_out"  # linear, ease_in, ease_out, ease_in_out
+
+  # Coarticulation (blending adjacent visemes)
+  enable_coarticulation: true
+  coarticulation_window_ms: 100.0
+  coarticulation_strength: 0.3
+
+  # Extended shapes
+  use_extended_shapes: true  # Use Rhubarb G, H, X shapes
+
+  # Animation quality
+  update_rate_hz: 60.0
+
+  # Intensity
+  intensity_scale: 1.0
+  prefer_wide_mouth: true   # Use shape D more often (more lively)
+
+# Event Bus Connection
+# --------------------
+connect_event_bus: true
+event_bus_retry_attempts: 3
+event_bus_retry_delay: 1.0
+
+# Performance Settings
+# --------------------
+target_fps: 60
+enable_vsync: true
+
+# Debug Settings
+# --------------
+show_fps: false
+show_debug_info: false
+log_events: false
