@@ -49,6 +49,9 @@ class DisplayManager:
         # State
         self.is_running = False
 
+        # Lip sync state - tracks if Rhubarb lip sync is controlling mouth
+        self._rhubarb_lip_sync_active = False
+
         logger.info("DisplayManager initialized")
 
     @property
@@ -125,6 +128,10 @@ class DisplayManager:
             self.event_bus.subscribe(EventType.RESPONSE_GENERATED, self._on_response_generated)
             self.event_bus.subscribe(EventType.ERROR_OCCURRED, self._on_error)
 
+            # Subscribe to lip sync events (Rhubarb integration)
+            self.event_bus.subscribe(EventType.LIP_SYNC_STARTED, self._on_lip_sync_started)
+            self.event_bus.subscribe(EventType.LIP_SYNC_COMPLETED, self._on_lip_sync_completed)
+
             self._event_bus_connected = True
             logger.info("Connected to event bus")
             return True
@@ -140,11 +147,33 @@ class DisplayManager:
     async def _on_tts_started(self, event) -> None:
         """Handle TTS start - begin speaking animation."""
         text = event.data.get('text', '')
+        audio_file = event.data.get('audio_file')
+
         self.set_animation_state('SPEAKING')
-        if text:
-            self.speak_text(text)
-        else:
-            self.start_speaking()
+
+        # Only use text-based lip sync if Rhubarb lip sync is not active
+        # Rhubarb lip sync will control mouth via MOUTH_SHAPE_UPDATE events
+        if not self._rhubarb_lip_sync_active:
+            if text:
+                self.speak_text(text)
+            else:
+                self.start_speaking()
+
+        logger.debug(f"TTS started (rhubarb_active={self._rhubarb_lip_sync_active})")
+
+    async def _on_lip_sync_started(self, event) -> None:
+        """Handle Rhubarb lip sync started - disable text-based lip sync."""
+        self._rhubarb_lip_sync_active = True
+        # Stop any text-based animation that might be running
+        self.stop_speaking()
+        # Set speaking state without text animation
+        self.set_animation_state('SPEAKING')
+        logger.info(f"Rhubarb lip sync started: {event.data.get('cue_count', 0)} cues")
+
+    async def _on_lip_sync_completed(self, event) -> None:
+        """Handle Rhubarb lip sync completed - re-enable text-based lip sync."""
+        self._rhubarb_lip_sync_active = False
+        logger.debug("Rhubarb lip sync completed")
 
     async def _on_tts_completed(self, event) -> None:
         """Handle TTS completion - stop speaking animation."""
@@ -321,6 +350,7 @@ class DisplayManager:
         return {
             'is_running': self.is_running,
             'event_bus_connected': self._event_bus_connected,
+            'rhubarb_lip_sync_active': self._rhubarb_lip_sync_active,
             'current_state': self.decision_module.get_current_state(),
             'statistics': self.window_manager.get_statistics()
         }
