@@ -68,6 +68,7 @@ class STTService:
         self.vosk_model_path = vosk_model_path
         self.is_running = False
         self.event_bus = None
+        self._loop = None  # Will be set in initialize() for async event emission
 
         # Initialize wake word model
         logger.info("Initializing wake word detection model...")
@@ -135,10 +136,41 @@ class STTService:
         logger.info("Initializing STT service with event bus...")
         self.event_bus = await EventBus.get_instance()
 
+        # Store the event loop reference for use in sync contexts
+        self._loop = asyncio.get_running_loop()
+
         # Subscribe to relevant events (e.g., system control events)
         self.event_bus.subscribe(EventType.SYSTEM_STOPPED, self._on_system_stopped)
 
         logger.info("STT service initialized with event bus")
+
+    def _emit_event_sync(self, event_type, data, correlation_id=None, source="stt"):
+        """Emit an event from a synchronous context using the stored event loop."""
+        if self._loop and self._loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(
+                emit_event(event_type, data, correlation_id=correlation_id, source=source),
+                self._loop
+            )
+            # Don't wait for the result - fire and forget
+            # But we can add a callback for error handling
+            def handle_exception(f):
+                try:
+                    f.result()
+                except Exception as e:
+                    logger.error(f"Error emitting event {event_type}: {e}")
+            future.add_done_callback(handle_exception)
+        else:
+            logger.warning(f"Cannot emit event {event_type}: no running event loop")
+
+    def _run_coroutine_sync(self, coro):
+        """Run a coroutine from a synchronous context using the stored event loop."""
+        if self._loop and self._loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+            return future.result()  # Block until complete
+        else:
+            # Fallback: create a new event loop (not ideal but works)
+            logger.warning("No running event loop, creating temporary one")
+            return asyncio.run(coro)
 
     def _detect_wake_word(self, audio_data, show_scores=False):
         """
@@ -475,7 +507,7 @@ class STTService:
 
                         # Emit wake word detected event
                         if self.event_bus:
-                            asyncio.create_task(emit_event(
+                            self._emit_event_sync(
                                 EventType.WAKE_WORD_DETECTED,
                                 {
                                     "wake_word": self.wake_word,
@@ -485,18 +517,18 @@ class STTService:
                                 },
                                 correlation_id=correlation_id,
                                 source="stt"
-                            ))
+                            )
 
                             # Emit audio started event
-                            asyncio.create_task(emit_event(
+                            self._emit_event_sync(
                                 EventType.AUDIO_STARTED,
                                 {"device_index": self.device_index},
                                 correlation_id=correlation_id,
                                 source="stt"
-                            ))
+                            )
 
                         # Transcribe speech (stream stays running for Vosk)
-                        text = asyncio.run(self._transcribe_speech(stream, correlation_id=correlation_id))
+                        text = self._run_coroutine_sync(self._transcribe_speech(stream, correlation_id=correlation_id))
 
                         if text:
                             print(f"\n📝 Transcribed text:")
@@ -505,12 +537,12 @@ class STTService:
 
                         # Emit audio stopped event
                         if self.event_bus:
-                            asyncio.create_task(emit_event(
+                            self._emit_event_sync(
                                 EventType.AUDIO_STOPPED,
                                 {},
                                 correlation_id=correlation_id,
                                 source="stt"
-                            ))
+                            )
 
                         # Resume wake word detection
                         print(f"👂 Listening for wake word: '{self.wake_word.upper()}'...")
