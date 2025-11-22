@@ -358,8 +358,10 @@ class LLMService:
             print(f"{'-'*60}\n")
 
             return answer
-        except json.JSONDecodeError:
-            print("ERROR: Invalid JSON response")
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Invalid JSON response (HTTP {response.status_code})")
+            print(f"Response content: {response.text[:500]}")
+            logger.error(f"JSON decode error: {e}, response: {response.text[:200]}")
             return None
 
     def _handle_stream_response(self, response: requests.Response) -> Optional[str]:
