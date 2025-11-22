@@ -58,3 +58,6 @@ htmlcov/
 *.temp
 temp/
 tmp/
+
+# Vendor binaries (downloaded dependencies)
+vendor/rhubarb/

@@ -63,6 +63,12 @@ class EventType(Enum):
     TTS_STARTED = "tts_started"
     PHONEME_EVENT = "phoneme_event"
     TTS_COMPLETED = "tts_completed"
+
+    # Lip Sync Events
+    LIP_SYNC_READY = "lip_sync_ready"           # Lip sync data generated and ready
+    LIP_SYNC_STARTED = "lip_sync_started"       # Lip sync playback started
+    LIP_SYNC_VISEME = "lip_sync_viseme"         # Individual viseme timing event
+    LIP_SYNC_COMPLETED = "lip_sync_completed"   # Lip sync playback completed
     
     # Animation Events
     EXPRESSION_CHANGE = "expression_change"

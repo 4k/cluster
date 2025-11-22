@@ -28,14 +28,16 @@ logger = logging.getLogger(__name__)
 class TTSService:
     """Text-to-Speech service using Piper-TTS for high-quality voice synthesis. Event-driven with async queuing."""
 
-    def __init__(self, model_path=None):
+    def __init__(self, model_path=None, keep_audio_files: bool = True):
         """
         Initialize the TTS service.
 
         Args:
             model_path: Path to Piper voice model (.onnx file)
+            keep_audio_files: If True, save audio files for lip sync processing
         """
         self.model_path = model_path or self._get_default_model()
+        self.keep_audio_files = keep_audio_files
 
         # Initialize Piper voice
         logger.info(f"Loading Piper voice model: {self.model_path}")
@@ -55,6 +57,14 @@ class TTSService:
         self.tts_queue = asyncio.Queue()
         self.is_processing = False
         self.is_running = False
+
+        # Audio file directory for lip sync
+        self.audio_dir = Path(tempfile.gettempdir()) / "cluster_tts_audio"
+        self.audio_dir.mkdir(parents=True, exist_ok=True)
+
+        # Track audio files for cleanup
+        self._audio_files: list = []
+        self._max_audio_files = 10  # Keep last N files
 
     async def initialize(self):
         """Initialize event bus connection and subscribe to events."""
@@ -139,12 +149,22 @@ class TTSService:
             logger.warning("Empty text provided, nothing to speak")
             return False
 
+        audio_file = None
+
         try:
-            # Emit TTS started event
+            # Generate audio file for lip sync if enabled
+            if self.keep_audio_files:
+                audio_file = self._generate_audio_file(text)
+
+            # Emit TTS started event with audio file path
             if self.event_bus:
                 await emit_event(
                     EventType.TTS_STARTED,
-                    {"text": text, "timestamp": time.time()},
+                    {
+                        "text": text,
+                        "timestamp": time.time(),
+                        "audio_file": str(audio_file) if audio_file else None
+                    },
                     correlation_id=correlation_id,
                     source="tts"
                 )
@@ -153,20 +173,31 @@ class TTSService:
             if self.event_bus:
                 await emit_event(
                     EventType.AUDIO_PLAYBACK_STARTED,
-                    {"text": text},
+                    {
+                        "text": text,
+                        "audio_file": str(audio_file) if audio_file else None
+                    },
                     correlation_id=correlation_id,
                     source="tts"
                 )
 
-            # Run blocking speak in executor
+            # Run blocking speak in executor (use existing audio file if available)
             loop = asyncio.get_event_loop()
-            success = await loop.run_in_executor(None, self.speak, text)
+            if audio_file and audio_file.exists():
+                success = await loop.run_in_executor(
+                    None, self._play_audio_file, str(audio_file)
+                )
+            else:
+                success = await loop.run_in_executor(None, self.speak, text)
 
             # Emit audio playback ended event
             if self.event_bus:
                 await emit_event(
                     EventType.AUDIO_PLAYBACK_ENDED,
-                    {"success": success},
+                    {
+                        "success": success,
+                        "audio_file": str(audio_file) if audio_file else None
+                    },
                     correlation_id=correlation_id,
                     source="tts"
                 )
@@ -197,6 +228,76 @@ class TTSService:
                     correlation_id=correlation_id,
                     source="tts"
                 )
+            return False
+
+    def _generate_audio_file(self, text: str) -> Optional[Path]:
+        """Generate audio file for text and return path."""
+        try:
+            # Create unique filename
+            timestamp = int(time.time() * 1000)
+            audio_file = self.audio_dir / f"tts_{timestamp}.wav"
+
+            # Synthesize to file
+            with wave.open(str(audio_file), 'wb') as wav_file:
+                self.voice.synthesize_wav(text, wav_file)
+
+            # Track file for cleanup
+            self._audio_files.append(audio_file)
+            self._cleanup_old_audio_files()
+
+            logger.info(f"Generated audio file: {audio_file}")
+            return audio_file
+
+        except Exception as e:
+            logger.error(f"Failed to generate audio file: {e}")
+            return None
+
+    def _cleanup_old_audio_files(self) -> None:
+        """Clean up old audio files, keeping only the most recent ones."""
+        while len(self._audio_files) > self._max_audio_files:
+            old_file = self._audio_files.pop(0)
+            try:
+                if old_file.exists():
+                    old_file.unlink()
+                    logger.debug(f"Cleaned up old audio file: {old_file}")
+            except Exception as e:
+                logger.warning(f"Failed to cleanup audio file {old_file}: {e}")
+
+    def _play_audio_file(self, audio_path: str) -> bool:
+        """Play an existing audio file."""
+        try:
+            print(f"\n🔊 Playing audio: {audio_path}")
+
+            with wave.open(audio_path, 'rb') as wav_reader:
+                sample_width = wav_reader.getsampwidth()
+                channels = wav_reader.getnchannels()
+                framerate = wav_reader.getframerate()
+
+                logger.info(f"Playing: {channels}ch, {framerate}Hz, {sample_width}bytes/sample")
+
+                stream = self.audio.open(
+                    format=self.audio.get_format_from_width(sample_width),
+                    channels=channels,
+                    rate=framerate,
+                    output=True,
+                    frames_per_buffer=1024
+                )
+
+                audio_data = wav_reader.readframes(wav_reader.getnframes())
+
+                chunk_size = 4096
+                for i in range(0, len(audio_data), chunk_size):
+                    chunk = audio_data[i:i+chunk_size]
+                    stream.write(chunk)
+
+                stream.stop_stream()
+                stream.close()
+
+            logger.info("Audio playback completed")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to play audio file: {e}")
             return False
 
     def _get_default_model(self):
