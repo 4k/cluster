@@ -198,6 +198,7 @@ class TTSService:
                 audio_file = self._generate_audio_file(text)
 
             # Emit TTS started event with audio file path
+            # AnimationService will generate Rhubarb lip sync and emit LIP_SYNC_READY
             if self.event_bus:
                 await emit_event(
                     EventType.TTS_STARTED,
@@ -210,8 +211,23 @@ class TTSService:
                     source="tts"
                 )
 
-            # NOTE: AUDIO_PLAYBACK_STARTED is emitted from inside _play_audio_file
-            # right when audio actually starts, for precise sync with animations
+            # Wait for lip sync to be ready before starting playback
+            # This ensures animation and audio start together
+            if audio_file and self.event_bus:
+                lip_sync_timeout = 30.0  # Max wait time for Rhubarb analysis
+                try:
+                    # Wait for LIP_SYNC_READY event with matching correlation_id
+                    ready_event = await self.event_bus.wait_for(
+                        EventType.LIP_SYNC_READY,
+                        timeout=lip_sync_timeout,
+                        filter_func=lambda e: e.correlation_id == correlation_id
+                    )
+                    if ready_event:
+                        logger.info(f"Lip sync ready, starting audio playback")
+                    else:
+                        logger.warning(f"Lip sync timeout after {lip_sync_timeout}s, proceeding without sync")
+                except Exception as e:
+                    logger.warning(f"Error waiting for lip sync: {e}, proceeding without sync")
 
             # Run blocking speak in executor (use existing audio file if available)
             loop = asyncio.get_event_loop()
