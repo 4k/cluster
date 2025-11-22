@@ -356,9 +356,10 @@ Examples:
         logger.info("Received shutdown signal")
         asyncio.create_task(assistant.shutdown())
 
-    # Register signal handlers
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, signal_handler)
+    # Register signal handlers (Unix only - Windows uses KeyboardInterrupt)
+    if sys.platform != 'win32':
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, signal_handler)
 
     try:
         # Initialize services
