@@ -322,13 +322,18 @@ class TTSService:
 
                 audio_data = wav_reader.readframes(wav_reader.getnframes())
 
+                # Calculate audio duration for animation sync
+                n_frames = wav_reader.getnframes()
+                audio_duration = n_frames / framerate
+
                 # Emit AUDIO_PLAYBACK_STARTED right before first chunk is written
                 # This ensures precise sync with lip animations
                 self._emit_event_sync(
                     EventType.AUDIO_PLAYBACK_STARTED,
                     {
                         "text": text,
-                        "audio_file": audio_path
+                        "audio_file": audio_path,
+                        "duration": audio_duration  # Duration in seconds for animation timing
                     },
                     correlation_id=correlation_id
                 )

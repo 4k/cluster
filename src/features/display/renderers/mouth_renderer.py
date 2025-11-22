@@ -205,6 +205,7 @@ class MouthRendererState(RendererState):
     speak_text: str = ""
     speak_index: int = 0
     speak_start_time: float = 0.0
+    speak_duration: float = 0.0  # Audio duration for timing sync
 
     # Rhubarb lip sync state
     rhubarb_active: bool = False  # True when Rhubarb is controlling mouth
@@ -675,7 +676,7 @@ class MouthRenderer(BaseRenderer):
         elif event == 'speak_stop':
             self.stop_speaking()
         elif event == 'speak_text':
-            self.speak_text(data.get('text', ''))
+            self.speak_text(data.get('text', ''), duration=data.get('duration'))
         elif event == 'viseme_update':
             viseme_name = data.get('viseme', 'SILENCE')
             intensity = data.get('intensity', 1.0)
@@ -728,12 +729,27 @@ class MouthRenderer(BaseRenderer):
             except KeyError:
                 logger.warning(f"Unknown animation state: {state_name}")
 
-    def speak_text(self, text: str) -> None:
-        """Start speaking with text-based lip sync."""
+    def speak_text(self, text: str, duration: float = None) -> None:
+        """
+        Start speaking with text-based lip sync.
+
+        Args:
+            text: Text to animate
+            duration: Audio duration in seconds (for timing sync).
+                     If provided, animation speed is adjusted to match.
+        """
         self.mouth_state.is_speaking = True
         self.mouth_state.speak_text = text
         self.mouth_state.speak_index = 0
         self.mouth_state.speak_start_time = time.time()
+        self.mouth_state.speak_duration = duration or 0.0
+
+        # Calculate chars_per_second based on audio duration for precise sync
+        if duration and duration > 0 and len(text) > 0:
+            self.chars_per_second = len(text) / duration
+            logger.debug(f"Text animation: {len(text)} chars / {duration:.2f}s = {self.chars_per_second:.1f} chars/sec")
+        else:
+            self.chars_per_second = 15.0  # Default fallback
 
     def start_speaking(self) -> None:
         """Start generic speaking animation."""

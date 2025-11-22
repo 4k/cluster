@@ -201,8 +201,9 @@ class DisplayManager:
         # Rhubarb lip sync will control mouth via MOUTH_SHAPE_UPDATE events
         if not self._rhubarb_lip_sync_active:
             text = getattr(self, '_pending_speak_text', '')
+            duration = event.data.get('duration')  # Audio duration in seconds
             if text:
-                self.speak_text(text)
+                self.speak_text(text, duration=duration)
             else:
                 self.start_speaking()
 
@@ -403,14 +404,15 @@ class DisplayManager:
         """Start generic speaking animation."""
         self.window_manager.start_speaking()
 
-    def speak_text(self, text: str) -> None:
+    def speak_text(self, text: str, duration: float = None) -> None:
         """
         Start speaking with text-based lip sync.
 
         Args:
             text: Text to animate
+            duration: Audio duration in seconds (for animation timing sync)
         """
-        self.window_manager.start_speaking(text)
+        self.window_manager.start_speaking(text, duration=duration)
 
     def stop_speaking(self) -> None:
         """Stop speaking animation."""
