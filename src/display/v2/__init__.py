@@ -21,10 +21,10 @@ Features:
 
 Usage:
     # Basic dual-window setup
-    python -m emotion_display_v2.demo
+    python -m src.display.v2.demo
 
     # Programmatic usage
-    from emotion_display_v2 import DisplayManager, DisplaySettings
+    from src.display.v2 import DisplayManager, DisplaySettings
 
     settings = DisplaySettings()
     manager = DisplayManager(settings)

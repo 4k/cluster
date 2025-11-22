@@ -19,9 +19,9 @@ import signal
 from pathlib import Path
 
 # Import services
-from stt_service import STTService
-from llm_service import LLMService
-from tts_service import TTSService
+from src.services.stt_service import STTService
+from src.services.llm_service import LLMService
+from src.services.tts_service import TTSService
 
 # Import event bus
 from src.core.event_bus import EventBus, EventType, emit_event
@@ -330,7 +330,7 @@ Examples:
 
     # List devices if requested
     if args.list_devices:
-        from stt_service import list_audio_devices
+        from src.services.stt_service import list_audio_devices
         list_audio_devices()
         return 0
 

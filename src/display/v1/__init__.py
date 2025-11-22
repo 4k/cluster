@@ -12,13 +12,13 @@ Features:
 
 Usage:
     # Standalone mode (combined window)
-    python -m emotion_display.emotion_display_service
+    python -m src.display.v1.emotion_display_service
 
     # Multi-window mode (separate processes)
-    python -m emotion_display.multi_window_launcher
+    python -m src.display.v1.multi_window_launcher
 
     # Programmatic usage
-    from emotion_display import EmotionDisplayService, EmotionDisplayConfig
+    from src.display.v1 import EmotionDisplayService, EmotionDisplayConfig
     service = EmotionDisplayService()
     await service.initialize()
     await service.start()
