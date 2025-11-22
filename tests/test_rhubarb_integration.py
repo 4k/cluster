@@ -22,7 +22,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.display.rhubarb_controller import (
+from src.features.display.rhubarb_controller import (
     RhubarbVisemeController,
     RhubarbControllerConfig,
     RhubarbShape,
@@ -34,7 +34,7 @@ from src.display.rhubarb_controller import (
     RHUBARB_TO_VISEME,
     COARTICULATION_PAIRS
 )
-from src.display.renderers.mouth_renderer import (
+from src.features.display.renderers.mouth_renderer import (
     MouthRenderer,
     Viseme,
     RHUBARB_SHAPE_TO_VISEME,
@@ -42,12 +42,12 @@ from src.display.renderers.mouth_renderer import (
     EasingType,
     apply_easing as mouth_apply_easing
 )
-from src.display.settings import (
+from src.features.display.settings import (
     DisplaySettings,
     RhubarbSettings,
     RendererSettings
 )
-from src.display.display_manager import DisplayManager
+from src.features.display.display_manager import DisplayManager
 
 
 class TestRhubarbShapes(unittest.TestCase):

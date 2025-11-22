@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # Local imports
-from .lip_sync_service import (
+from .lip_sync import (
     RhubarbLipSyncService,
     LipSyncData,
     VisemeCue,

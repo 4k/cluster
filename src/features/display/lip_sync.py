@@ -27,8 +27,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Project paths - lip_sync_service.py is at src/services/lip_sync_service.py
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+# Project paths - lip_sync.py is at src/features/display/lip_sync.py
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 VENDOR_RHUBARB_DIR = PROJECT_ROOT / "vendor" / "rhubarb"
 
 
