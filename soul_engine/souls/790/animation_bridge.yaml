@@ -1,0 +1,48 @@
+# ------------------------------------------------------------------
+# DISPLAY MAPPING
+# ------------------------------------------------------------------
+# Maps the 'Soul State' (Internal) to 'Display Command' (External)
+
+state_to_animation:
+  
+  # When 790 is worshipping the user...
+  mode_worship:
+    display_emotion: "love"       # If your module supports 'love'
+    fallback_emotion: "happy"     # If 'love' fails, use 'happy'
+    eye_behavior: "dilated"       # Big pupils
+    animation_loop: "pulse"       # Eyes pulse slowly
+
+  # When 790 is jealous/hating...
+  mode_jealousy:
+    display_emotion: "angry"
+    eye_behavior: "narrow"        # Squinting
+    animation_loop: "jitter"      # Eyes twitch rapidly
+
+  # When 790 is sad/alone...
+  mode_despair:
+    display_emotion: "bored"      # Or 'sad' if available
+    eye_behavior: "droopy"        # Half-closed eyelids
+    animation_loop: "slow_blink"
+
+  # When 790 is glitching/confused...
+  mode_glitch:
+    display_emotion: "surprised"
+    eye_behavior: "asymmetric"    # One eye big, one small
+    animation_loop: "random_saccades"
+
+# ------------------------------------------------------------------
+# REACTIVE GESTURES (Lip Sync & Event-Driven)
+# ------------------------------------------------------------------
+# Short-term overrides based on specific events
+
+events:
+  - id: "speaking"
+    action: "activate_mouth_sync" # Tells module to listen to TTS audio
+  
+  - id: "processing_query"
+    display_emotion: "thinking"
+    action: "eyes_look_up"        # Look up while thinking
+    
+  - id: "wake_word_detected"
+    display_emotion: "surprised"  # Shocked joy
+    duration: 2.0s

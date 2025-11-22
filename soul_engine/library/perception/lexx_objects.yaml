@@ -1,0 +1,15 @@
+namespace: "lexx_universe_v1"
+
+objects:
+  - label: "person"
+    confidence_threshold: 0.6
+    attributes: ["male"]
+    id: "rival_male"
+    
+  - label: "person"
+    confidence_threshold: 0.6
+    attributes: ["female"]
+    id: "potential_imprint"
+
+  - label: "knife" # or dangerous object
+    id: "weapon_threat"

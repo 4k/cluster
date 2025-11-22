@@ -1,0 +1,22 @@
+voice_provider: "elevenlabs"
+base_voice_id: "crazy_robot_v1"
+
+# The Engine scans the LLM text for these tags
+style_mappings:
+  # LLM Output: "I... I love you!" -> Detects hesitation
+  - pattern: "stutter" 
+    setting: 
+      stability: 0.3 # Make voice shaky
+      
+  # LLM Output: "GET OUT!" -> Detects shouting
+  - pattern: "caps_lock_ratio > 0.5"
+    setting:
+      stability: 0.1
+      style_exaggeration: 0.9 # Scream
+      volume_boost: +10db
+
+  # Specific 790 quirk: Poetry Mode
+  - context: "reciting_poem"
+    setting:
+      speed: 0.8 # Slow down
+      pitch_shift: -10 # Deeper, more 'dramatic'

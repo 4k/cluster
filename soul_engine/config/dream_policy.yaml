@@ -1,0 +1,23 @@
+# ------------------------------------------------------------------
+# DREAMING PROCESS ORCHESTRATION (Managed by the System Scheduler)
+# ------------------------------------------------------------------
+dream_schedule:
+  trigger: "inactivity" # Start when the system is idle or at low load
+  inactivity_threshold: 1800s # 30 minutes of no user interaction
+  max_runtime: 600s         # Cap the LLM call time to prevent cost overruns
+
+memory_sources:
+  - id: "episodic_log"
+    source_path: "data/memory/event_log.yaml"
+    # Only process events that haven't been summarized yet
+    filter_by_tag: "needs_consolidation" 
+
+  - id: "user_profiles"
+    source_path: "data/user_profiles/"
+    filter_by_field: "790_relationship_variables.last_updated"
+    
+consolidation_actions:
+  # The required output steps for the dreaming process
+  - action: "summarize_events"     # Condense detailed events into general insights
+  - action: "update_internal_state" # Update the Soul's current status (boredom, goals)
+  - action: "calculate_forgetting" # Identify low-relevance events for deletion

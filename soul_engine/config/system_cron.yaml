@@ -1,0 +1,9 @@
+schedule: "04:00"
+process: "summarize_and_reflect"
+
+instructions: |
+  1. Read all logs from yesterday.
+  2. Extract key facts (e.g., "User mentioned they hate broccoli").
+  3. Update 'user_profile.yaml'.
+  4. Formulate an opinion: Did the User treat me well today?
+  5. Generate a 'Morning Greeting' based on this summary.
