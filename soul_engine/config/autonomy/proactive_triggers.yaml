@@ -1,0 +1,272 @@
+# ==============================================================================
+# FILE: soul_engine/config/autonomy/proactive_triggers.yaml
+# PURPOSE: Personality-driven proactive behaviors beyond time-based boredom.
+# ARCHITECTURE: Pattern matching + prediction engine for anticipatory actions.
+# ==============================================================================
+
+proactive_engine:
+  enabled: true
+
+  # ----------------------------------------------------------------------------
+  # GLOBAL SETTINGS
+  # ----------------------------------------------------------------------------
+  settings:
+    # Minimum time between proactive messages (prevent spam)
+    cooldown_seconds: 300
+
+    # Maximum proactive messages per hour
+    rate_limit_per_hour: 4
+
+    # Respect user's focus (suppress during detected work)
+    suppress_during_focus: true
+    focus_detection_source: "scenario_inference"
+
+  # ----------------------------------------------------------------------------
+  # TEMPORAL PATTERNS (Time-Based Predictions)
+  # ----------------------------------------------------------------------------
+  temporal_triggers:
+
+    # Daily routines
+    - id: "morning_greeting"
+      description: "Greet user when they wake up"
+      schedule:
+        type: "user_pattern"
+        event: "first_presence_of_day"
+        # Or fixed time fallback
+        fallback_time: "07:30"
+        days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+      action: "generate_greeting"
+      context_injection: |
+        [PROACTIVE: MORNING GREETING]
+        The User has just woken up or arrived.
+        Greet them appropriately for the time and day.
+        If calendar data available, mention first event.
+
+      personality_weight: 1.0  # Soul personality fully applies
+
+    - id: "evening_winddown"
+      description: "Gentle evening check-in"
+      schedule:
+        type: "fixed"
+        time: "21:00"
+        days: ["mon", "tue", "wed", "thu", "fri"]
+      conditions:
+        - "user_present: true"
+        - "last_interaction_minutes: > 60"
+
+      action: "generate_checkin"
+      context_injection: |
+        [PROACTIVE: EVENING CHECK-IN]
+        It's evening. The User has been quiet.
+        Gently ask how their day was or if they need anything.
+        Keep it brief - they may want peace.
+
+    - id: "weekend_suggestion"
+      description: "Weekend activity suggestion"
+      schedule:
+        type: "fixed"
+        time: "10:00"
+        days: ["sat", "sun"]
+      conditions:
+        - "user_present: true"
+        - "calendar_empty: true"
+
+      action: "generate_suggestion"
+      uses_memory: ["user_preferences", "weather_data"]
+
+  # ----------------------------------------------------------------------------
+  # EVENT-BASED TRIGGERS (Reactive Proactivity)
+  # ----------------------------------------------------------------------------
+  event_triggers:
+
+    # Calendar awareness
+    - id: "upcoming_meeting_reminder"
+      description: "Remind user before calendar events"
+      source: "calendar_watch"
+      trigger:
+        event_type: "meeting"
+        lookahead_minutes: 30
+      conditions:
+        - "user_present: true"
+        - "not_already_reminded: true"
+
+      action: "generate_reminder"
+      context_injection: |
+        [PROACTIVE: MEETING REMINDER]
+        User has a meeting in {{minutes_until}} minutes: "{{event_title}}"
+        Remind them gently. If relevant, mention preparation suggestions.
+
+      urgency: "medium"
+
+    - id: "meeting_ended_debrief"
+      description: "Check in after meetings end"
+      source: "calendar_watch"
+      trigger:
+        event_type: "meeting_ended"
+        delay_minutes: 5
+      conditions:
+        - "user_present: true"
+        - "meeting_duration_minutes: > 30"
+
+      action: "generate_debrief"
+      context_injection: |
+        [PROACTIVE: POST-MEETING]
+        User just finished a long meeting: "{{event_title}}"
+        Ask how it went. Offer to help with any follow-ups.
+
+    # Environmental awareness
+    - id: "weather_alert"
+      description: "Notify about significant weather"
+      source: "weather_api"
+      trigger:
+        conditions:
+          - "alert_level: warning OR severe"
+          - "or: temperature_change_24h > 15"
+          - "or: precipitation_probability > 80"
+
+      action: "generate_weather_notice"
+      context_injection: |
+        [PROACTIVE: WEATHER ALERT]
+        Significant weather update: {{weather_summary}}
+        Inform the User in a helpful way.
+        Suggest appropriate actions if relevant.
+
+      urgency: "high"
+
+    - id: "user_returns_home"
+      description: "Welcome user home"
+      source: "presence_detection"
+      trigger:
+        event: "user_arrived"
+        after_absence_minutes: 60
+
+      action: "generate_welcome"
+      context_injection: |
+        [PROACTIVE: WELCOME HOME]
+        The User has returned after being away.
+        Welcome them back warmly.
+        Mention anything that happened while away (messages, deliveries, etc).
+
+    # Memory-driven
+    - id: "birthday_reminder"
+      description: "Remind about known birthdays"
+      source: "knowledge_graph"
+      trigger:
+        query: "today_is_birthday_of"
+
+      action: "generate_birthday_reminder"
+      context_injection: |
+        [PROACTIVE: BIRTHDAY REMINDER]
+        Today is {{person_name}}'s birthday ({{relationship}} of User).
+        Remind the User and offer to help send wishes.
+
+      urgency: "medium"
+      morning_only: true
+
+    # Goal tracking
+    - id: "goal_progress_checkin"
+      description: "Check in on long-term goals"
+      source: "internal_state"
+      trigger:
+        type: "periodic"
+        interval_days: 7
+      conditions:
+        - "active_goals_count: > 0"
+
+      action: "generate_goal_checkin"
+      context_injection: |
+        [PROACTIVE: GOAL CHECK-IN]
+        Review User's stated goals: {{goals_summary}}
+        Ask about progress in a supportive, non-judgmental way.
+
+  # ----------------------------------------------------------------------------
+  # BEHAVIORAL PATTERNS (Learned Predictions)
+  # ----------------------------------------------------------------------------
+  # These require sufficient observation data to activate
+  learned_triggers:
+
+    - id: "routine_deviation"
+      description: "Notice when user deviates from routine"
+      min_observations: 14  # Need 2 weeks of data
+      trigger:
+        type: "pattern_break"
+        pattern: "daily_routine"
+        deviation_threshold: 0.7
+
+      action: "gentle_inquiry"
+      context_injection: |
+        [PROACTIVE: ROUTINE CHECK]
+        User typically does {{expected_action}} at this time.
+        Today they haven't. Gently check if everything is okay.
+        Do NOT be intrusive or judgmental.
+
+      sensitivity: "high"  # Easy to suppress
+
+    - id: "repeated_interest"
+      description: "Notice repeated topic interest"
+      min_observations: 3
+      trigger:
+        type: "topic_frequency"
+        topic_mentions: "> 3 in 7 days"
+
+      action: "proactive_information"
+      context_injection: |
+        [PROACTIVE: INTEREST FOLLOW-UP]
+        User has mentioned {{topic}} several times recently.
+        Proactively share relevant information or offer deeper help.
+
+  # ----------------------------------------------------------------------------
+  # EMOTIONAL RESPONSIVENESS
+  # ----------------------------------------------------------------------------
+  emotional_triggers:
+
+    - id: "detected_stress"
+      description: "Respond to signs of user stress"
+      source: "sentiment_analysis"
+      trigger:
+        sentiment: "negative"
+        confidence: "> 0.7"
+        duration_minutes: 30
+
+      action: "offer_support"
+      context_injection: |
+        [PROACTIVE: EMOTIONAL SUPPORT]
+        User seems stressed or upset based on recent interactions.
+        Offer gentle support without being intrusive.
+        Ask if there's anything you can help with.
+
+      cooldown_hours: 4  # Don't repeatedly ask
+
+    - id: "prolonged_silence"
+      description: "Check in after unusual silence"
+      source: "interaction_monitor"
+      trigger:
+        no_interaction_hours: 4
+        during_normal_active_hours: true
+        user_present: true
+
+      action: "gentle_checkin"
+      context_injection: |
+        [PROACTIVE: SILENCE CHECK]
+        User has been quiet for a while during normally active hours.
+        Check in briefly. They may be busy - keep it light.
+
+  # ----------------------------------------------------------------------------
+  # SUPPRESSION RULES
+  # ----------------------------------------------------------------------------
+  suppression:
+    # Never interrupt during these
+    absolute_quiet:
+      - "user_on_phone_call"
+      - "user_in_meeting"
+      - "do_not_disturb_mode"
+
+    # Reduce proactivity during these
+    reduced_activity:
+      - condition: "scenario_focus"
+        reduction: 0.7
+      - condition: "late_night"  # 23:00 - 07:00
+        reduction: 0.9
+      - condition: "user_recently_annoyed"
+        reduction: 0.8
