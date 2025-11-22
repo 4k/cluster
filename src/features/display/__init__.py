@@ -94,6 +94,7 @@ class DisplayFeature(Feature):
 
             # Initialize display manager
             self.display_manager = DisplayManager(self.settings)
+            await self.display_manager.initialize()
 
             # Initialize animation service (handles lip sync)
             self.animation_service = AnimationService()
