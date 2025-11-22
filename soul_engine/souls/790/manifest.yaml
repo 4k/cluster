@@ -194,7 +194,7 @@ vision:
 lore:
 # Import the extensive file we just created
   import_libraries:
-  - "library/lore/lexx_extended.yaml"
+  - "library/lore/lexx.yaml"
 
 # You can still add soul-specific one-off memories here if needed
   local_entries:
