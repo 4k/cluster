@@ -13,10 +13,7 @@ from typing import Optional, Dict, Any
 
 # Event bus imports
 from src.core.event_bus import EventBus, EventType, emit_event
-
-# Default configuration constants
-DEFAULT_BASE_URL = "http://192.168.1.144:11434"
-DEFAULT_MODEL = "qwen3-coder:30b"
+from src.core.service_config import LLMServiceConfig
 
 logger = logging.getLogger(__name__)
 
@@ -26,42 +23,54 @@ class LLMService:
 
     def __init__(
         self,
-        base_url: str = DEFAULT_BASE_URL,
+        base_url: str = None,
         api_key: Optional[str] = None,
-        api_type: str = "auto",
-        default_model: str = DEFAULT_MODEL,
-        system_prompt: Optional[str] = None
+        api_type: str = None,
+        default_model: str = None,
+        system_prompt: Optional[str] = None,
+        config: LLMServiceConfig = None
     ):
         """
         Initialize LLM service
 
         Args:
-            base_url: Base URL of Ollama instance
-            api_key: Optional API key for authentication
-            api_type: API type - 'auto', 'ollama', 'openai', or 'chat'
-            default_model: Default model name to use for requests
-            system_prompt: Optional system prompt to use for all requests
+            base_url: Base URL of Ollama instance (default: from config)
+            api_key: Optional API key for authentication (default: from config)
+            api_type: API type - 'auto', 'ollama', 'openai', or 'chat' (default: from config)
+            default_model: Default model name to use for requests (default: from config)
+            system_prompt: Optional system prompt to use for all requests (default: from config)
+            config: LLMServiceConfig instance (default: loaded from config/llm.yaml)
         """
-        self.base_url = base_url.rstrip('/')
-        self.api_key = api_key
-        self.api_type = api_type
-        self.default_model = default_model
-        self.system_prompt = system_prompt or "You are a helpful voice assistant. Provide concise, natural responses suitable for voice output."
+        # Load configuration from file if not provided
+        if config is None:
+            config = LLMServiceConfig.load()
+
+        # Use provided values or fall back to config
+        self.base_url = (base_url or config.base_url).rstrip('/')
+        self.api_key = api_key if api_key is not None else config.api_key
+        self.api_type = api_type or config.api_type
+        self.default_model = default_model or config.default_model
+        self.system_prompt = system_prompt or config.system_prompt
+
+        # Store additional config values
+        self._config = config
+        self.timeout_seconds = config.timeout_seconds
+
         self.detected_endpoint = None
         self.event_bus = None
 
         # Set up headers
         self.headers = {"Content-Type": "application/json"}
-        if api_key:
-            self.headers["Authorization"] = f"Bearer {api_key}"
+        if self.api_key:
+            self.headers["Authorization"] = f"Bearer {self.api_key}"
 
         print(f"LLM Service initialized with Ollama at: {self.base_url}")
         print(f"Default model: {self.default_model}")
-        if api_key:
+        if self.api_key:
             print(f"Using authentication: Yes")
 
         # Auto-detect best endpoint if requested
-        if api_type == "auto":
+        if self.api_type == "auto":
             self._detect_endpoint()
 
     async def initialize(self):
@@ -299,7 +308,7 @@ class LLMService:
                 api_url,
                 json=payload,
                 headers=self.headers,
-                timeout=120
+                timeout=self.timeout_seconds
             )
 
             # Enhanced error reporting
@@ -525,11 +534,8 @@ async def main_async():
     # Emit system started event
     await emit_event(EventType.SYSTEM_STARTED, {"service": "llm"}, source="llm")
 
-    # Initialize service with your model
-    llm = LLMService(
-        base_url=DEFAULT_BASE_URL,
-        default_model=DEFAULT_MODEL
-    )
+    # Initialize service (config loaded from config/llm.yaml)
+    llm = LLMService()
 
     # Run diagnostics first
     llm.diagnose()

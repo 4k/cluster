@@ -1,0 +1,57 @@
+# Speech-to-Text Service Configuration
+# =====================================
+# This file configures the STT service including wake word detection,
+# audio processing, and Vosk speech recognition settings.
+#
+# Environment variable overrides use the prefix STT_
+# Example: STT_WAKE_WORD=alexa, STT_THRESHOLD=0.6
+
+# Wake Word Detection
+# -------------------
+# The wake word that triggers speech recognition.
+# Supported wake words depend on openwakeword models:
+# alexa, jarvis, hey_mycroft, hey_rhasspy, computer
+wake_word: "jarvis"
+
+# Detection threshold (0.0 - 1.0)
+# Higher values = fewer false positives, but may miss some triggers
+# Lower values = more sensitive, but more false positives
+threshold: 0.5
+
+# Audio Settings
+# --------------
+# Chunk size in frames (80ms at 16kHz is recommended for openwakeword)
+chunk_size: 1280
+
+# Sample rate in Hz (16000 is required for most models)
+sample_rate: 16000
+
+# Vosk Speech Recognition
+# -----------------------
+# Path to Vosk model directory (null = auto-detect)
+vosk_model_path: null
+
+# Directories to search for Vosk models (in order)
+vosk_model_search_paths:
+  - "models/vosk/vosk-model-small-en-us-0.15"
+  - "models/vosk/vosk-model-en-us-0.22"
+  - "models/vosk-model-small-en-us-0.15"
+
+# Voice Activity Detection
+# ------------------------
+# RMS threshold for silence detection (audio levels below this are silence)
+silence_threshold_rms: 500
+
+# Maximum recording duration in seconds
+max_recording_seconds: 5.0
+
+# Duration of silence before stopping recording (seconds)
+silence_duration_seconds: 1.5
+
+# Device Settings
+# ---------------
+# Audio input device index (null = system default)
+device_index: null
+
+# Enable verbose output showing detection scores
+verbose: false
