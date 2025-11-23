@@ -1,0 +1,121 @@
+# Speech-to-Text Service Configuration
+# =====================================
+# This file configures the modular STT service with support for
+# multiple STT engines and wake word detection engines.
+#
+# Environment variable overrides use the prefix STT_
+# Example: STT_ENGINE=whisper, STT_WAKE_WORD=alexa
+
+# =============================================================================
+# Engine Selection
+# =============================================================================
+# Available STT engines: vosk, whisper, azure, google (some require API keys)
+engine: vosk
+
+# Available wake word engines: openwakeword, porcupine, none
+wake_word_engine: openwakeword
+
+# =============================================================================
+# Wake Word Detection
+# =============================================================================
+# The wake word that triggers speech recognition
+# Supported: alexa, jarvis, hey_mycroft, hey_rhasspy, computer
+wake_word: "jarvis"
+
+# Detection threshold (0.0 - 1.0)
+# Higher = fewer false positives, Lower = more sensitive
+threshold: 0.5
+
+# =============================================================================
+# Voice Activity Detection
+# =============================================================================
+# RMS threshold for silence detection
+silence_threshold_rms: 500
+
+# Maximum recording duration in seconds
+max_recording_seconds: 5.0
+
+# Duration of silence before stopping recording
+silence_duration_seconds: 1.5
+
+# =============================================================================
+# Audio Settings
+# =============================================================================
+# Sample rate in Hz (16000 required for most models)
+sample_rate: 16000
+
+# Chunk size in frames (80ms at 16kHz recommended for wake word)
+chunk_size: 1280
+
+# Audio input device index (null = system default)
+device_index: null
+
+# Enable verbose output showing detection scores
+verbose: false
+
+# =============================================================================
+# Engine-Specific Configuration
+# =============================================================================
+engines:
+  # Vosk (local, fast, offline)
+  vosk:
+    # Path to Vosk model directory (null = auto-detect)
+    model_path: null
+    # Directories to search for models
+    model_search_paths:
+      - "models/vosk/vosk-model-small-en-us-0.15"
+      - "models/vosk/vosk-model-en-us-0.22"
+      - "models/vosk-model-small-en-us-0.15"
+    # Enable word-level timestamps
+    enable_words: true
+
+  # Whisper (local or API, high accuracy)
+  whisper:
+    # Model size: tiny, base, small, medium, large
+    model_size: base
+    # Use local model or OpenAI API
+    use_api: false
+    # API key for OpenAI Whisper (if use_api is true)
+    api_key: null
+    # Language (null = auto-detect)
+    language: en
+
+  # Azure Speech Services (cloud, real-time)
+  azure:
+    # Subscription key (use env: STT_ENGINES__AZURE__SUBSCRIPTION_KEY)
+    subscription_key: null
+    # Azure region
+    region: eastus
+    # Language
+    language: en-US
+
+  # Google Speech-to-Text (cloud, high accuracy)
+  google:
+    # Service account credentials path
+    credentials_path: null
+    # Language code
+    language_code: en-US
+    # Enable word-level timestamps
+    enable_word_time_offsets: true
+
+# =============================================================================
+# Wake Word Engine Configuration
+# =============================================================================
+wake_word_engines:
+  # OpenWakeWord (local, privacy-focused)
+  openwakeword:
+    # Inference framework: onnx or tflite
+    inference_framework: onnx
+    # Custom model paths (optional)
+    custom_model_paths: []
+
+  # Porcupine (commercial, very accurate)
+  porcupine:
+    # Access key (from Picovoice console)
+    access_key: null
+    # Keywords to detect
+    keywords:
+      - jarvis
+    # Sensitivities per keyword (0.0 - 1.0)
+    sensitivities:
+      - 0.5
