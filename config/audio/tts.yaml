@@ -1,0 +1,120 @@
+# Text-to-Speech Service Configuration
+# =====================================
+# This file configures the modular TTS service with support for
+# multiple engines and viseme extraction providers.
+#
+# Environment variable overrides use the prefix TTS_
+# Example: TTS_ENGINE=azure, TTS_VISEME_PROVIDER=text_based
+
+# =============================================================================
+# Engine Selection
+# =============================================================================
+# Available engines: piper, azure, openai, elevenlabs (some may require API keys)
+engine: piper
+
+# =============================================================================
+# Viseme Extraction
+# =============================================================================
+# Available providers: rhubarb, text_based, azure, none
+# - rhubarb: Accurate audio analysis (requires Rhubarb binary)
+# - text_based: Fast phoneme-based estimation (no external dependencies)
+# - azure: Inline visemes from Azure TTS (only with azure engine)
+# - none: Disable lip sync
+viseme_provider: rhubarb
+
+# Wait for viseme extraction before starting audio playback
+# Set to false for lower latency (visemes will catch up)
+wait_for_visemes: true
+
+# Fallback provider if primary fails (e.g., "text_based" or "none")
+viseme_fallback: text_based
+
+# =============================================================================
+# Audio Settings
+# =============================================================================
+# Keep generated audio files (required for Rhubarb analysis)
+keep_audio_files: true
+
+# Maximum number of audio files to retain
+max_audio_files: 10
+
+# Directory for audio files (null = system temp directory)
+audio_output_dir: null
+
+# =============================================================================
+# Engine-Specific Configuration
+# =============================================================================
+engines:
+  # Piper TTS (local, fast, Raspberry Pi optimized)
+  piper:
+    # Path to voice model (.onnx file), null = auto-detect
+    model_path: null
+    # Directory to search for models
+    model_search_dir: "~/.local/share/piper/voices"
+    # Synthesis parameters
+    length_scale: 1.0      # Speed: < 1.0 = faster, > 1.0 = slower
+    noise_scale: 0.667     # Variation in pronunciation
+    noise_w: 0.8           # Variation in phoneme duration
+
+  # Azure Cognitive Services TTS (cloud, high quality, native visemes)
+  azure:
+    # Subscription key (use env var: TTS_ENGINES__AZURE__SUBSCRIPTION_KEY)
+    subscription_key: null
+    # Azure region (e.g., eastus, westus2)
+    region: eastus
+    # Voice name
+    voice_name: en-US-JennyNeural
+    # Output format
+    output_format: audio-16khz-32kbitrate-mono-mp3
+
+  # OpenAI TTS (cloud, natural voices)
+  openai:
+    # API key (use env var: TTS_ENGINES__OPENAI__API_KEY)
+    api_key: null
+    # Model: tts-1 (faster) or tts-1-hd (higher quality)
+    model: tts-1
+    # Voice: alloy, echo, fable, onyx, nova, shimmer
+    voice: alloy
+    # Speed multiplier (0.25 to 4.0)
+    speed: 1.0
+
+  # ElevenLabs TTS (cloud, voice cloning)
+  elevenlabs:
+    # API key (use env var: TTS_ENGINES__ELEVENLABS__API_KEY)
+    api_key: null
+    # Voice ID (get from ElevenLabs dashboard)
+    voice_id: null
+    # Model ID
+    model_id: eleven_monolingual_v1
+    # Stability (0.0 to 1.0)
+    stability: 0.5
+    # Similarity boost (0.0 to 1.0)
+    similarity_boost: 0.75
+
+# =============================================================================
+# Viseme Provider Configuration
+# =============================================================================
+viseme_providers:
+  # Rhubarb Lip Sync (accurate, requires audio file)
+  rhubarb:
+    # Path to rhubarb executable (null = auto-detect)
+    rhubarb_path: null
+    # Speech recognizer: pocketSphinx (English) or phonetic (any language)
+    recognizer: pocketSphinx
+    # Use extended shape set (G, H, X)
+    extended_shapes: true
+    # Timeout in seconds
+    timeout: 60
+
+  # Text-based estimation (fast, no dependencies)
+  text_based:
+    # Duration per character in seconds
+    char_duration: 0.08
+    # Duration for word boundaries
+    space_duration: 0.1
+    # Minimum viseme duration
+    min_viseme_duration: 0.04
+    # Process digraphs (th, ch, sh, etc.)
+    process_digraphs: true
+    # Speed multiplier
+    speed_factor: 1.0
